@@ -2,6 +2,7 @@
 #include <limits>
 #include <random>
 #include <array>
+#include <algorithm>
 
 /*
 This is the function you need to implement. Quick reference:
@@ -20,8 +21,9 @@ void mf(int ny, int nx, int hy, int hx, const float *in, float *out) {
   double *t = (double *)malloc(sizeof(double) * nt);
 
   // For each pixel, calculate the median.
-  for (int x = 0; x < nx; x++) {
-    for (int y = 0; y < ny; y++) {
+  // Iterate on row first then column.
+  for (int y = 0; y < ny; y++) {
+    for (int x = 0; x < nx; x++) {
 
       int x1 = std::max(x-hx, 0);
       int x2 = std::min(x+hx+1, nx);
@@ -39,39 +41,34 @@ void mf(int ny, int nx, int hy, int hx, const float *in, float *out) {
       // because we need nth_element modifies the original array.
       // cant use std::copy() as the source array
       // as defined by (x1->x2) and (y1->y2) bounds is not continuous.
-      int t3 = 0;
-      for (int tx = y1; tx < y2; tx++) {
-        for (int ty = x1; ty < x2; ty++) {
-          t[t3] = in[tx + x2*ty];
-          t3++;
+      int t_len = 0;
+      // iterate first on row then col.
+      for (int ty = y1; ty < y2; ty++) {
+        for (int tx = x1; tx < x2; tx++) {
+          t[t_len] = in[tx + nx*ty];
+          t_len++;
         }
       }
 
-      std::cout << t3 << "\n";
-      //int t_len = (x2 - x1) * (y2 - y1);
-      int t_len = t3;
       double m1 = 0.0;
       double m2 = 0.0;
 
       std::vector<double> tarray(t, t + t_len);
-
 
       if ((t_len % 2) != 0) {
         std::nth_element(tarray.begin(), tarray.begin() + t_len / 2, tarray.end());
         m1 = tarray[t_len / 2];
         out[x + nx*y] = (float)m1;
       } else {
+
         std::nth_element(tarray.begin(), tarray.begin() + t_len / 2, tarray.end());
         m1 = tarray[t_len / 2];
 
-        std::nth_element(tarray.begin(), tarray.begin() + (t_len / 2) + 1, tarray.end());
+        std::nth_element(tarray.begin(), tarray.begin() + (t_len / 2) - 1, tarray.end());
         m2 = tarray[(t_len / 2) - 1];
 
         out[x + nx*y] = (float)((m1 + m2) / 2.0);
       }
-
-      std::cout << x << " " << y << " " << out[x + nx*y] << " || " << m1 << " " << m2 << "\n";
-      std::cout << x << " " << y << " " << x1 << " " << x2 << " " << y1 << " " << y2 << "\n\n";
     }
   }
   free(t);
