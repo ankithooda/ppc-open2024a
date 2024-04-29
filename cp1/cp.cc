@@ -1,3 +1,15 @@
+#include <iostream>
+#include <cmath>
+
+void print_m(int ny, int nx, double *T) {
+
+  for (int r = 0; r < ny; r++) {
+    for (int c = 0; c < nx; c++) {
+      std::cout << " " << T[c + r * nx] << " ";
+    }
+    std::cout << "\n";
+  }
+}
 /*
 This is the function you need to implement. Quick reference:
 - input rows: 0 <= y < ny
@@ -8,10 +20,10 @@ This is the function you need to implement. Quick reference:
 */
 void correlate(int ny, int nx, const float *data, float *result) {
 
-  double *row_sums = malloc(sizeof(double) * nx);
-  double *row_means = malloc(sizeof(double) * nx);
+  double *row_sq_sums = (double *)malloc(sizeof(double) * nx);
+  double *row_means = (double *)malloc(sizeof(double) * nx);
 
-  double *T = malloc(sizeof(double) * nx * ny);
+  double *T = (double *)malloc(sizeof(double) * nx * ny);
 
   // Calculate sums and means.
   for (int r = 0; r < ny; r++) {
@@ -34,21 +46,28 @@ void correlate(int ny, int nx, const float *data, float *result) {
     }
   }
 
-  // Calculate Sum of this new matrix.
+  print_m(ny, nx, T);
+
+  // Calculate Squared Sum of this new matrix.
   for (int r = 0; r < ny; r++) {
-    double sum = 0;
+    double sq_sum = 0;
 
     for (int c = 0; c < nx; c++) {
-      sum = sum + T[c + r * nx];
+      sq_sum = sq_sum + T[c + r * nx] * T[c + r * nx];
     }
-    row_sums[r] = sum;
+    row_sq_sums[r] = sqrt(sq_sum);
   }
 
-  // Normalize T matrix so that sum of each is zero.
+  // Normalize T matrix so that sum of squared each is zero.
   for (int r = 0; r < ny; r++) {
     for (int c = 0; c < nx; c++) {
-      T[c + r * nx] = T[c + r * nx] / row_sums[r];
+      T[c + r * nx] = T[c + r * nx] / row_sq_sums[r];
     }
   }
+  print_m(ny, nx, T);
 
+  // Free all allocated memory
+  free(row_means);
+  free(row_sq_sums);
+  free(T);
 }
