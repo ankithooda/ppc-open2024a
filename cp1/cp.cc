@@ -46,8 +46,6 @@ void correlate(int ny, int nx, const float *data, float *result) {
     }
   }
 
-  print_m(ny, nx, T);
-
   // Calculate Squared Sum of this new matrix.
   for (int r = 0; r < ny; r++) {
     double sq_sum = 0;
@@ -64,24 +62,28 @@ void correlate(int ny, int nx, const float *data, float *result) {
       T[c + r * nx] = T[c + r * nx] / row_sq_sums[r];
     }
   }
-  print_m(ny, nx, T);
 
   // Multiply T with it's transpose; only the upper half.
-  // Y = `T*T
+  // Y = T*T`
+  // The result matrix will have ny*ny
+  // because T is ny * nx
+  // T` is nx * ny
+  //
   for (int r = 0; r < ny; r++) {
-    for (int c = 0; c < nx; c++) {
+    for (int c = 0; c < ny; c++) {
       // Only the upper half.
-      //if (r <= c) {
+      if (r <= c) {
         double rc_sum = 0;
-        for (int k = 0; k < ny; k++) {
+        for (int k = 0; k < nx; k++) {
+          // T[k + c * nx] = T`[c + k * nx]
 
+          // sum = T[i, k] + T`[k, j]
+          // or
+          // sum = T[i, k] + T`[j, k]
           rc_sum = rc_sum + T[k + r * nx] * T[k + c * nx];
-          std::cout << r << " " << c << " " << k << " " << rc_sum << "\n";
         }
-        std::cout << "########\n\n";
-
         result[c + r * ny] = (float)rc_sum;
-        //}
+      }
     }
   }
   // Free all allocated memory
