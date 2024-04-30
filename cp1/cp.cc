@@ -20,8 +20,8 @@ This is the function you need to implement. Quick reference:
 */
 void correlate(int ny, int nx, const float *data, float *result) {
 
-  double *row_sq_sums = (double *)malloc(sizeof(double) * nx);
-  double *row_means = (double *)malloc(sizeof(double) * nx);
+  double *row_sq_sums = (double *)malloc(sizeof(double) * ny);
+  double *row_means = (double *)malloc(sizeof(double) * ny);
 
   double *T = (double *)malloc(sizeof(double) * nx * ny);
 
@@ -66,6 +66,24 @@ void correlate(int ny, int nx, const float *data, float *result) {
   }
   print_m(ny, nx, T);
 
+  // Multiply T with it's transpose; only the upper half.
+  // Y = `T*T
+  for (int r = 0; r < ny; r++) {
+    for (int c = 0; c < nx; c++) {
+      // Only the upper half.
+      //if (r <= c) {
+        double rc_sum = 0;
+        for (int k = 0; k < ny; k++) {
+
+          rc_sum = rc_sum + T[k + r * nx] * T[k + c * nx];
+          std::cout << r << " " << c << " " << k << " " << rc_sum << "\n";
+        }
+        std::cout << "########\n\n";
+
+        result[c + r * ny] = (float)rc_sum;
+        //}
+    }
+  }
   // Free all allocated memory
   free(row_means);
   free(row_sq_sums);
