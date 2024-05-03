@@ -6,20 +6,20 @@
 void step(float* r, const float* d, int n);
 
 int main() {
-  constexpr int n = 1500;
+  constexpr int n = 3;
   float *d = (float*)malloc(sizeof(float) * n * n);
 
-  // d[0] = 0;
-  // d[1] = 8;
-  // d[2] = 2;
+  d[0] = 0;
+  d[1] = 8;
+  d[2] = 2;
 
-  // d[3] = 1;
-  // d[4] = 0;
-  // d[5] = 9;
+  d[3] = 1;
+  d[4] = 0;
+  d[5] = 9;
 
-  // d[6] = 4;
-  // d[7] = 5;
-  // d[8] = 0;
+  d[6] = 4;
+  d[7] = 5;
+  d[8] = 0;
 
   //Fill with random numbers
   std::random_device seed;

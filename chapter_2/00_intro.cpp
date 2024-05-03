@@ -4,7 +4,7 @@
 #include <x86intrin.h>
 
 int main() {
-  constexpr int n = 4000;
+  constexpr int n = 6000;
   float *d = (float*)malloc(sizeof(float) * n * n);
 
   // d[0] = 0;
@@ -38,7 +38,7 @@ int main() {
     std::cout << "Start\n";
 
     before = __rdtsc();
-
+    #pragma omp parallel for
     for (unsigned int j = 0; j < n; j++) {
       for (unsigned int i = 0; i < n; i++) {
         t[i * n + j] = d[j * n + i];
@@ -59,7 +59,7 @@ int main() {
     //   }
     //   std::cout << "\n";
     // }
-
+    #pragma omp parallel for
     for (unsigned int j = 0; j < n; j++) {
       for (unsigned int i = 0; i < n; i++) {
         float v = std::numeric_limits<float>::infinity();
