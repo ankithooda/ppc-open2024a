@@ -4,10 +4,14 @@
 #include <x86intrin.h>
 
 int main() {
-  constexpr int n = 4000;
+  constexpr int n = 3000;
 
   int factor = 4;
-  float *d = (float*)malloc(sizeof(float) * n * n);
+
+  const float infty = std::numeric_limits<float>::infinity();
+
+  std::vector<float> d(n * n, infty);
+  std::vector<float> r(n * n);
 
   // d[0] = 0;
   // d[1] = 8;
@@ -33,9 +37,10 @@ int main() {
   unsigned long after, before, mid1;
 
 
+  int pn = ((n - (factor - 1)) / factor) * factor;
 
-  float *r = (float*)malloc(sizeof(float) * n * n);
-  float *t = (float*)malloc(sizeof(float) * n * n);
+  std::vector<float> _d(n * pn, infty);
+  std::vector<float> _t(n * pn, infty);
 
   std::cout << "Start\n";
 
@@ -43,7 +48,11 @@ int main() {
 #pragma omp parallel for
   for (unsigned int j = 0; j < n; j++) {
     for (unsigned int i = 0; i < n; i++) {
-      t[i * n + j] = d[j * n + i];
+      // Transpose
+      _t[i * n + j] = d[j * n + i];
+
+      // Data
+      _d[j * n + i] = d[j * n + i];
     }
   }
   mid1 = __rdtsc();
@@ -64,15 +73,24 @@ int main() {
   //#pragma omp parallel for
   for (unsigned int j = 0; j < n; j++) {
     for (unsigned int i = 0; i < n; i++) {
-      float v = std::numeric_limits<float>::infinity();
+      std::vector<float> v(factor, infty);
+      //float v = std::numeric_limits<float>::infinity();
 
-      for (unsigned int k = 0; k < n; k++) {
-        float x = d[j*n+k];
-        float y = t[i*n+k];
-        float z = x + y;
-        v = std::min(v, z);
+      for (unsigned int k = 0; k < pn; k=k+4) {
+        for (unsigned int ki = 0; ki < factor; ki++) {
+          v[ki] = std::min(v[ki], _d[j * n + k] + _t[i * n + k]);
+        }
+        //float x = d[j*n+k];
+        //float y = t[i*n+k];
+        //float z = x + y;
+        //v = std::min(v, z);
       }
-      r[j*n+i] = v;
+      //Calculate final min;
+      float vv = infty;
+      for (unsigned int ki = 0; ki < factor; ki++) {
+        vv = std::min(vv, v[ki]);
+      }
+      r[j*n+i] = vv;
     }
   }
   after = __rdtsc();
