@@ -16,3 +16,6 @@
 00_intro_baseline:
 	mkdir -p bin && g++ -fopenmp -g -O3 -march=native -std=c++17 -o bin/00_intro_baseline 00_intro_baseline.cpp
 
+00_intro_ipl:
+	mkdir -p bin && g++ -fopenmp -g -O3 -march=native -std=c++17 -o bin/00_intro_ipl 00_intro_ipl.cpp
+
