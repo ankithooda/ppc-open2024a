@@ -48,10 +48,14 @@ void correlate(int ny, int nx, const float *data, float *result) {
   // for each row arithmetic mean is zero.
   // This can be done by subtracting
   // each element of the row by the arithmetic mean of the row.
-
+  // [INSTRUCTION PIPELINED CODE]
   for (int r = 0; r < ny; r++) {
-    for (int c = 0; c < nx; c++) {
-      T[c + r * nx] = data[c + r * nx] - row_means[r];
+    for (int c = 0; c < nx; c=c+factor) {
+      for (int f = 0; f < factor; f++) {
+        if (f + c < nx) {
+          T[f + c + r * nx] = data[f + c + r * nx] - row_means[r];
+        }
+      }
     }
   }
 
@@ -79,8 +83,12 @@ void correlate(int ny, int nx, const float *data, float *result) {
   // Normalize T matrix so that sum of squared each is zero.
 
   for (int r = 0; r < ny; r++) {
-    for (int c = 0; c < nx; c++) {
-      T[c + r * nx] = T[c + r * nx] / row_sq_sums[r];
+    for (int c = 0; c < nx; c=c+factor) {
+      for (int f = 0; f < factor; f++) {
+        if (f + c < nx) {
+          T[f + c + r * nx] = T[f + c + r * nx] / row_sq_sums[r];
+        }
+      }
     }
   }
 
