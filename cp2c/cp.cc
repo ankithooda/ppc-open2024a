@@ -1,5 +1,20 @@
 #include <iostream>
 #include <cmath>
+#include <vector>
+
+constexpr int capacity = 4; // Vector registers can hold 4 double precision float.
+typedef double double_vt __attribute__ ((vector_size (capacity * sizeof(double))));
+constexpr double_vt zero_vt {
+  0, 0, 0, 0
+};
+
+double l_sum(double_vt a) {
+  double sum = 0;
+  for (int c = 0; c < capacity; c++) {
+    sum = sum + a[c];
+  }
+  return sum;
+}
 
 void print_m(int ny, int nx, double *T) {
 
@@ -10,6 +25,7 @@ void print_m(int ny, int nx, double *T) {
     std::cout << "\n";
   }
 }
+
 /*
 This is the function you need to implement. Quick reference:
 - input rows: 0 <= y < ny
@@ -20,10 +36,13 @@ This is the function you need to implement. Quick reference:
 */
 void correlate(int ny, int nx, const float *data, float *result) {
 
+  int pad_nx = (nx + capacity - 1) / nx;
+
   double *row_sq_sums = (double *)malloc(sizeof(double) * ny);
   double *row_means = (double *)malloc(sizeof(double) * ny);
-
   double *T = (double *)malloc(sizeof(double) * nx * ny);
+
+  std::vector<double_vt> VT(ny * pad_nx);
 
   // Calculate sums and means.
   for (int r = 0; r < ny; r++) {
@@ -60,6 +79,21 @@ void correlate(int ny, int nx, const float *data, float *result) {
   for (int r = 0; r < ny; r++) {
     for (int c = 0; c < nx; c++) {
       T[c + r * nx] = T[c + r * nx] / row_sq_sums[r];
+    }
+  }
+
+  // Zero'd VT
+  for (int r = 0; r < ny; r++) {
+    for (int c = 0; c < pad_nx; c++) {
+      VT[c + r * pad_nx] = zero_vt;
+    }
+  }
+  // Convert T -> VT vectorized form
+  for (int r = 0; r < ny; r++) {
+    for (int c = 0; c < pad_nx; c=c+capacity) {
+      for (int vi = 0; vi < capacity; vi++) {
+        VT[c + r * pad_nx][vi] = T[vi + c + r * pad_nx];
+      }
     }
   }
 
