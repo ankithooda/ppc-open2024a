@@ -16,6 +16,13 @@ double l_sum(double_vt a) {
   return sum;
 }
 
+void print_vec(double_vt a) {
+  for (int c = 0; c < capacity; c++) {
+    std::cout << a[c] << " ";
+  }
+  std::cout << "\n";
+}
+
 void print_m(int ny, int nx, double *T) {
 
   for (int r = 0; r < ny; r++) {
@@ -36,7 +43,10 @@ This is the function you need to implement. Quick reference:
 */
 void correlate(int ny, int nx, const float *data, float *result) {
 
-  int pad_nx = (nx + capacity - 1) / nx;
+  int pad_nx = (nx + capacity - 1) / capacity;
+
+  // std::cout << "Vector Bounds " <<  ny << " " << pad_nx << "\n";
+  // std::cout << "Original Bounds " <<  ny << " " << nx << "\n";
 
   double *row_sq_sums = (double *)malloc(sizeof(double) * ny);
   double *row_means = (double *)malloc(sizeof(double) * ny);
@@ -82,6 +92,10 @@ void correlate(int ny, int nx, const float *data, float *result) {
     }
   }
 
+  // std::cout << "Printing original T \n";
+  // print_m(ny, nx, T);
+
+
   // Zero'd VT
   for (int r = 0; r < ny; r++) {
     for (int c = 0; c < pad_nx; c++) {
@@ -90,12 +104,22 @@ void correlate(int ny, int nx, const float *data, float *result) {
   }
   // Convert T -> VT vectorized form
   for (int r = 0; r < ny; r++) {
-    for (int c = 0; c < pad_nx; c=c+capacity) {
+    for (int c = 0; c < nx; c=c+capacity) {
       for (int vi = 0; vi < capacity; vi++) {
-        VT[c + r * pad_nx][vi] = T[vi + c + r * pad_nx];
+        if (vi + c < nx) {
+          VT[(c / capacity) + r * pad_nx][vi] = T[vi + c + r * nx];
+        }
       }
     }
   }
+
+  // std::cout << "Printing Vectorized T \n";
+  // for (int r = 0; r < ny; r++) {
+  //   for (int c = 0; c < pad_nx; c++) {
+  //     print_vec(VT[c + r * pad_nx]);
+  //   }
+  // }
+
 
   // Multiply T with it's transpose; only the upper half.
   // Y = T*T`
@@ -108,13 +132,32 @@ void correlate(int ny, int nx, const float *data, float *result) {
       // Only the upper half.
       if (r <= c) {
         double rc_sum = 0;
-        for (int k = 0; k < nx; k++) {
+        double_vt t;
+        for (int k = 0; k < pad_nx; k++) {
           // T[k + c * nx] = T`[c + k * nx]
 
           // sum = T[i, k] + T`[k, j]
           // or
           // sum = T[i, k] + T`[j, k]
-          rc_sum = rc_sum + T[k + r * nx] * T[k + c * nx];
+
+          // std::cout<<"----------------\n";
+          // std::cout << r << " " << c << " " << k << " " << pad_nx << "\n";
+          // print_vec(VT[k + r * pad_nx]);
+          // print_vec(VT[k + c * pad_nx]);
+          // std::cout<<" ############### \n";
+
+          t = (VT[k + r * pad_nx] * VT[k + c * pad_nx]);
+          // print_vec(t);
+          // std::cout << "Sums begin \n";
+
+          for (int ci = 0; ci < capacity; ci++){
+            rc_sum = rc_sum + t[ci];
+            // std::cout << rc_sum << "\n";
+          }
+          // std::cout << "?????????????????????????????\n";
+
+          //rc_sum = rc_sum + l_sum(t);
+
         }
         result[c + r * ny] = (float)rc_sum;
       }
