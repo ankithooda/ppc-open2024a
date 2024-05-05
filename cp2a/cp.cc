@@ -101,14 +101,27 @@ void correlate(int ny, int nx, const float *data, float *result) {
       // Only the upper half.
       if (r <= c) {
         double rc_sum = 0;
-        for (int k = 0; k < nx; k++) {
+        std::vector<double> rc_sum4(factor, 0);
+
+        for (int k = 0; k < nx; k=k+factor) {
           // T[k + c * nx] = T`[c + k * nx]
 
           // sum = T[i, k] + T`[k, j]
           // or
           // sum = T[i, k] + T`[j, k]
-          rc_sum = rc_sum + T[k + r * nx] * T[k + c * nx];
+
+          for (int f = 0; f < factor; f++) {
+            if (f + k < nx) {
+              rc_sum4[f] = rc_sum4[f] + T[f + k + r * nx] * T[f + k + c * nx];
+            }
+          }
+          //rc_sum = rc_sum + T[k + r * nx] * T[k + c * nx];
         }
+        // Get all 4 sums
+        for (int f = 0; f < factor; f++) {
+          rc_sum = rc_sum + rc_sum4[f];
+        }
+
         result[c + r * ny] = (float)rc_sum;
       }
     }
