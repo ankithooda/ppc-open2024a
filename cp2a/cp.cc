@@ -18,23 +18,8 @@ void correlate(int ny, int nx, const float *data, float *result) {
 
   // Create padded data.
   int factor = 4; // How many instruction in pipeline we want.
-  // int pad_nx;
-  // if (nx < factor) {
-  //   pad_nx = factor;
-  // } else {
-  //   pad_nx = ((nx - (factor - 1)) / factor) * factor;
-  // }
 
-  // std::vector<double> pad_data(ny * pad_nx);
-
-  // // Copy the data into padded_data
-  // for (int r = 0; r < ny; r++) {
-  //   for (int c = 0; c < nx; c++) {
-  //     pad_data[c + r * nx] = data[c + r * nx];
-  //   }
-  // }
-
-  // Calculate sums and means.
+  // Calculate sums and means. [INSTRUCTION PIPELINED CODE]
   for (int r = 0; r < ny; r++) {
     double sum = 0;
     std::vector<double> sum4(factor, 0);
@@ -50,12 +35,10 @@ void correlate(int ny, int nx, const float *data, float *result) {
       }
       //sum = sum + data[c +  r * nx];
     }
-
     // Get all 4 sums
     for (int f = 0; f < factor; f++) {
       sum = sum + sum4[f];
     }
-
     //row_sums[r] = sum;
     row_means[r] = sum / nx;
   }
@@ -74,10 +57,20 @@ void correlate(int ny, int nx, const float *data, float *result) {
   // Calculate Squared Sum of this new matrix.
   for (int r = 0; r < ny; r++) {
     double sq_sum = 0;
+    std::vector<double> sq_sum4(factor, 0);
 
-    for (int c = 0; c < nx; c++) {
-      sq_sum = sq_sum + T[c + r * nx] * T[c + r * nx];
+    for (int c = 0; c < nx; c=c+factor) {
+      for (int f = 0; f < factor; f++) {
+        if (f + c < nx) {
+          sq_sum4[f] = sq_sum4[f] + T[f + c + r * nx] * T[f + c + r * nx];
+        }
+      }
+      //sq_sum = sq_sum + T[c + r * nx] * T[c + r * nx];
     }
+    for (int f = 0; f < factor; f++) {
+      sq_sum = sq_sum + sq_sum4[f];
+    }
+
     row_sq_sums[r] = sqrt(sq_sum);
   }
 
@@ -95,6 +88,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
   // because T is ny * nx
   // T` is nx * ny
   //
+  // [INSTRUCTION PIPELINED CODE]
 
   for (int r = 0; r < ny; r++) {
     for (int c = 0; c < ny; c++) {
