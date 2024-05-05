@@ -8,13 +8,6 @@ constexpr double_vt zero_vt {
   0, 0, 0, 0
 };
 
-double l_sum(double_vt a) {
-  double sum = 0;
-  for (int c = 0; c < capacity; c++) {
-    sum = sum + a[c];
-  }
-  return sum;
-}
 
 void print_vec(double_vt a) {
   for (int c = 0; c < capacity; c++) {
@@ -104,10 +97,10 @@ void correlate(int ny, int nx, const float *data, float *result) {
   }
   // Convert T -> VT vectorized form
   for (int r = 0; r < ny; r++) {
-    for (int c = 0; c < nx; c=c+capacity) {
+    for (int c = 0; c < pad_nx; c++) {
       for (int vi = 0; vi < capacity; vi++) {
-        if (vi + c < nx) {
-          VT[(c / capacity) + r * pad_nx][vi] = T[vi + c + r * nx];
+        if (vi + c * capacity < nx) {
+          VT[c + r * pad_nx][vi] = T[vi + (c * capacity) + r * nx];
         }
       }
     }
