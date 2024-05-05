@@ -19,10 +19,11 @@ void correlate(int ny, int nx, const float *data, float *result) {
   // Create padded data.
   int factor = 4; // How many instruction in pipeline we want.
 
-  // Calculate sums and means. [INSTRUCTION PIPELINED CODE]
+  // Calculate sums and means.
+  // [INSTRUCTION PIPELINED CODE]
   for (int r = 0; r < ny; r++) {
     double sum = 0;
-    std::vector<double> sum4(factor, 0);
+    std::vector<double> sumf(factor, 0);
 
     // Calculate 4 sums at a time.
     for (int c = 0; c < nx; c=c+factor) {
@@ -30,14 +31,14 @@ void correlate(int ny, int nx, const float *data, float *result) {
 
         // Check we are within in nx bound.
         if (f + c < nx) {
-          sum4[f] = sum4[f] + data[f + c + r * nx];
+          sumf[f] = sumf[f] + data[f + c + r * nx];
         }
       }
       //sum = sum + data[c +  r * nx];
     }
     // Get all 4 sums
     for (int f = 0; f < factor; f++) {
-      sum = sum + sum4[f];
+      sum = sum + sumf[f];
     }
     //row_sums[r] = sum;
     row_means[r] = sum / nx;
@@ -55,20 +56,21 @@ void correlate(int ny, int nx, const float *data, float *result) {
   }
 
   // Calculate Squared Sum of this new matrix.
+  // [INSTRUCTION PIPELINED CODE]
   for (int r = 0; r < ny; r++) {
     double sq_sum = 0;
-    std::vector<double> sq_sum4(factor, 0);
+    std::vector<double> sq_sumf(factor, 0);
 
     for (int c = 0; c < nx; c=c+factor) {
       for (int f = 0; f < factor; f++) {
         if (f + c < nx) {
-          sq_sum4[f] = sq_sum4[f] + T[f + c + r * nx] * T[f + c + r * nx];
+          sq_sumf[f] = sq_sumf[f] + T[f + c + r * nx] * T[f + c + r * nx];
         }
       }
       //sq_sum = sq_sum + T[c + r * nx] * T[c + r * nx];
     }
     for (int f = 0; f < factor; f++) {
-      sq_sum = sq_sum + sq_sum4[f];
+      sq_sum = sq_sum + sq_sumf[f];
     }
 
     row_sq_sums[r] = sqrt(sq_sum);
@@ -95,7 +97,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
       // Only the upper half.
       if (r <= c) {
         double rc_sum = 0;
-        std::vector<double> rc_sum4(factor, 0);
+        std::vector<double> rc_sumf(factor, 0);
 
         for (int k = 0; k < nx; k=k+factor) {
           // T[k + c * nx] = T`[c + k * nx]
@@ -106,14 +108,14 @@ void correlate(int ny, int nx, const float *data, float *result) {
 
           for (int f = 0; f < factor; f++) {
             if (f + k < nx) {
-              rc_sum4[f] = rc_sum4[f] + T[f + k + r * nx] * T[f + k + c * nx];
+              rc_sumf[f] = rc_sumf[f] + T[f + k + r * nx] * T[f + k + c * nx];
             }
           }
           //rc_sum = rc_sum + T[k + r * nx] * T[k + c * nx];
         }
         // Get all 4 sums
         for (int f = 0; f < factor; f++) {
-          rc_sum = rc_sum + rc_sum4[f];
+          rc_sum = rc_sum + rc_sumf[f];
         }
 
         result[c + r * ny] = (float)rc_sum;
