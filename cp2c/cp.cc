@@ -123,17 +123,32 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   }
   // Convert T -> VT vectorized form
   // using intrinsics
-  __mmask8 pad_mask = _cvtu32_mask8(15);
+  __mmask8 pad_mask = _cvtu32_mask8(7);
 
   std::cout << pad_mask <<"|"<< pad_mask<<"|" << "Pad Mask\n";
 
   __m256d *IT;
-  if (posix_memalign((void**)&IT, 32, capacity * sizeof(double)) == 0) {
-      IT[0] = _mm256_maskz_expandloadu_pd(pad_mask, T);
-      print_matrix_vector_double(1, 1, IT);
-      free(IT);
 
+  if (posix_memalign((void**)&IT, 32, capacity * sizeof(double)) != 0) {
+    // Return from function, this will cause
+    // address sanitizer issuer in the testing framework
+    // as other memory has not been freed.
+    return -1;
   }
+
+  // double *tt = (double *)malloc(capacity * sizeof(double));
+
+  // tt[0] = 1;
+  // tt[1] = 2;
+  // tt[2] = 3;
+  // tt[3] = 4;
+
+  // IT[0] = _mm256_maskz_expandloadu_pd(pad_mask, tt);
+  // print_matrix_vector_double(1, 1, IT);
+  // free(IT);
+  // free(tt);
+
+
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < pad_nx; c++) {
       for (unsigned int vi = 0; vi < capacity; vi++) {
@@ -145,8 +160,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   }
 
   // std::cout << "Printing Vectorized T \n";
-  // for (int r = 0; r < ny; r++) {
-  //   for (int c = 0; c < pad_nx; c++) {
+  // for (unsigned int r = 0; r < ny; r++) {
+  //   for (unsigned int c = 0; c < pad_nx; c++) {
   //     print_vec(VT[c + r * pad_nx]);
   //   }
   // }
