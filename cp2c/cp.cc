@@ -2,6 +2,7 @@
 #include <cmath>
 #include <vector>
 #include <immintrin.h>
+#include <cmath>
 
 constexpr unsigned int capacity = 4; // Vector registers can hold 4 double precision float.
 typedef double double_vt __attribute__ ((vector_size (capacity * sizeof(double))));
@@ -30,7 +31,7 @@ void print_m(unsigned int ny, unsigned int nx, double *T) {
 
 void print_vector_double(__m256d *v) {
   double *a;
-  std::cout << v << " Address of vector\n";
+  // std::cout << v << " Address of vector\n";
   if (posix_memalign((void**)&a, align_boundary, capacity * sizeof(double)) == 0) {
     _mm256_store_pd(a, *v);
     for (unsigned int i = 0; i < capacity; i++) {
@@ -44,7 +45,7 @@ void print_vector_double(__m256d *v) {
 void print_matrix_vector_double(unsigned int ny, unsigned int nx, __m256d *matrix) {
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < nx; c++) {
-      std::cout << matrix + c + r * nx << " Address in loop\n";
+      // std::cout << matrix + c + r * nx << " Address in loop\n";
       print_vector_double(matrix + c + r * nx);
     }
   }
@@ -111,8 +112,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     }
   }
 
-  // std::cout << "Printing original T \n";
-  // print_m(ny, nx, T);
+  std::cout << "Printing original T \n";
+  print_m(ny, nx, T);
 
 
   // Zero'd VT
@@ -123,17 +124,14 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   }
   // Convert T -> VT vectorized form
   // using intrinsics
-  __mmask8 pad_mask = _cvtu32_mask8(7);
-
-  std::cout << pad_mask <<"|"<< pad_mask<<"|" << "Pad Mask\n";
-
+  __mmask8 pad_mask = _cvtu32_mask8(15);
   __m256d *IT;
 
-  if (posix_memalign((void**)&IT, 32, capacity * sizeof(double)) != 0) {
+  if (posix_memalign((void**)&IT, 32, ny * pad_nx * capacity * sizeof(double)) != 0) {
     // Return from function, this will cause
     // address sanitizer issuer in the testing framework
     // as other memory has not been freed.
-    return -1;
+    return;
   }
 
   // double *tt = (double *)malloc(capacity * sizeof(double));
@@ -148,6 +146,20 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // free(IT);
   // free(tt);
 
+  // Run the loop for pad_nx - 1
+  // because pad_nx - 1 vectors will alway be completely filled.
+  // Only the last vector can be partially filled.
+  for (unsigned int r = 0; r < ny; r++) {
+    for (unsigned int c = 0; c < pad_nx-1; c++) {
+      IT[c] = _mm256_maskz_expandloadu_pd(pad_mask, T + c * capacity);
+    }
+  }
+  int bits = nx - ((pad_nx - 1) * capacity);
+  pad_mask = _cvtu32_mask8(pow(2, bits));
+
+  // Fill last vector;
+  IT[pad_nx - 1] = _mm256_maskz_expandloadu_pd(pad_mask, T + ((pad_nx - 1) * capacity));
+  print_matrix_vector_double(ny, pad_nx, IT);
 
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < pad_nx; c++) {
@@ -159,12 +171,12 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     }
   }
 
-  // std::cout << "Printing Vectorized T \n";
-  // for (unsigned int r = 0; r < ny; r++) {
-  //   for (unsigned int c = 0; c < pad_nx; c++) {
-  //     print_vec(VT[c + r * pad_nx]);
-  //   }
-  // }
+  std::cout << "Printing Vectorized T \n";
+  for (unsigned int r = 0; r < ny; r++) {
+    for (unsigned int c = 0; c < pad_nx; c++) {
+      print_vec(VT[c + r * pad_nx]);
+    }
+  }
 
 
   // Multiply T with it's transpose; only the upper half.
@@ -217,4 +229,5 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   free(row_means);
   free(row_sq_sums);
   free(T);
+  free(IT);
 }
