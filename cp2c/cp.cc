@@ -5,19 +5,7 @@
 #include <cmath>
 
 constexpr unsigned int capacity = 4; // Vector registers can hold 4 double precision float.
-typedef double double_vt __attribute__ ((vector_size (capacity * sizeof(double))));
-constexpr double_vt zero_vt {
-  0, 0, 0, 0
-};
 constexpr int align_boundary = 32;
-
-
-void print_vec(double_vt a) {
-  for (unsigned int c = 0; c < capacity; c++) {
-    std::cout << a[c] << " ";
-  }
-  std::cout << "\n";
-}
 
 void print_m(unsigned int ny, unsigned int nx, double *T) {
 
@@ -72,8 +60,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   double *row_means = (double *)malloc(sizeof(double) * ny);
   double *T = (double *)malloc(sizeof(double) * nx * ny);
 
-  std::vector<double_vt> VT(ny * pad_nx);
-
   // Calculate sums and means.
   for (unsigned int r = 0; r < ny; r++) {
     double sum = 0;
@@ -115,13 +101,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // std::cout << "Printing original T \n";
   // print_m(ny, nx, T);
 
-
-  // Zero'd VT
-  for (unsigned int r = 0; r < ny; r++) {
-    for (unsigned int c = 0; c < pad_nx; c++) {
-      VT[c + r * pad_nx] = zero_vt;
-    }
-  }
   // Convert T -> VT vectorized form
   // using intrinsics
   __mmask8 pad_mask;
@@ -153,86 +132,19 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   //std::cout << "Priniting vector matrix \n";
   //print_matrix_vector_double(ny, pad_nx, IT);
 
-  for (unsigned int r = 0; r < ny; r++) {
-    for (unsigned int c = 0; c < pad_nx; c++) {
-      for (unsigned int vi = 0; vi < capacity; vi++) {
-        if (vi + c * capacity < nx) {
-          VT[c + r * pad_nx][vi] = T[vi + (c * capacity) + r * nx];
-        }
-      }
-    }
-  }
-
-  // std::cout << "Printing Vectorized T \n";
-  // for (unsigned int r = 0; r < ny; r++) {
-  //   for (unsigned int c = 0; c < pad_nx; c++) {
-  //     print_vec(VT[c + r * pad_nx]);
-  //   }
-  // }
-
-
-  // Multiply T with it's transpose; only the upper half.
-  // Y = T*T`
-  // The result matrix will have ny*ny
-  // because T is ny * nx
-  // T` is nx * ny
-  //
-  asm("# LOOP START HERE ");
-  for (unsigned int r = 0; r < ny; r++) {
-    for (unsigned int c = 0; c < ny; c++) {
-      // Only the upper half.
-      if (r <= c) {
-        double rc_sum = 0;
-        double_vt t;
-        for (unsigned int k = 0; k < pad_nx; k++) {
-          // T[k + c * nx] = T`[c + k * nx]
-
-          // sum = T[i, k] + T`[k, j]
-          // or
-          // sum = T[i, k] + T`[j, k]
-
-          asm("#MULTIPLY HERE");
-
-          t = (VT[k + r * pad_nx] * VT[k + c * pad_nx]);
-          // print_vec(t);
-          // std::cout << "Sums begin \n";
-          asm("#MULTIPLY END");
-          for (unsigned int ci = 0; ci < capacity; ci++){
-            rc_sum = rc_sum + t[ci];
-            // std::cout << rc_sum << "\n";
-          }
-          asm("#HORIZONTAL SUM");
-          // std::cout << "?????????????????????????????\n";
-
-          //rc_sum = rc_sum + l_sum(t);
-
-        }
-        result[c + r * ny] = (float)rc_sum;
-      }
-    }
-    asm("# LOOP ENDS HERE");
-  }
-
-
-
   // VECTOR IMPLEMENTATION
   __m256d *temp;
   if (posix_memalign((void**)&temp, 32,  pad_nx * capacity * sizeof(double)) != 0) {
     return;
   }
 
-  //std::cout << ny << " " << nx << " " << pad_nx << "\n";
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < ny; c++) {
       if ( r <= c) {
         double sum = 0;
         __m256d acc = _mm256_setzero_pd();
         for (unsigned k = 0; k < pad_nx; k++) {
-
-          //std::cout << "---- " << r << " " << c << " " << k << " " << r + c * pad_nx << " " << c + r * pad_nx << "\n";
-          //temp[k] = _mm256_setzero_pd();
           temp[k] = IT[k + r * pad_nx] * IT[k + c * pad_nx];
-
           acc = _mm256_add_pd(acc, temp[k]);
         }
         // Take horizontal sum
