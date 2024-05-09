@@ -191,11 +191,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
           // or
           // sum = T[i, k] + T`[j, k]
 
-          // std::cout<<"----------------\n";
-          // std::cout << r << " " << c << " " << k << " " << pad_nx << "\n";
-          // print_vec(VT[k + r * pad_nx]);
-          // print_vec(VT[k + c * pad_nx]);
-          // std::cout<<" ############### \n";
           asm("#MULTIPLY HERE");
 
           t = (VT[k + r * pad_nx] * VT[k + c * pad_nx]);
@@ -217,9 +212,44 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     }
     asm("# LOOP ENDS HERE");
   }
+
+
+
+  // VECTOR IMPLEMENTATION
+  __m256d *temp;
+  if (posix_memalign((void**)&temp, 32,  pad_nx * capacity * sizeof(double)) != 0) {
+    return;
+  }
+
+  //std::cout << ny << " " << nx << " " << pad_nx << "\n";
+  for (unsigned int r = 0; r < ny; r++) {
+    for (unsigned int c = 0; c < ny; c++) {
+      if ( r <= c) {
+        double sum = 0;
+        __m256d acc = _mm256_setzero_pd();
+        for (unsigned k = 0; k < pad_nx; k++) {
+
+          //std::cout << "---- " << r << " " << c << " " << k << " " << r + c * pad_nx << " " << c + r * pad_nx << "\n";
+          //temp[k] = _mm256_setzero_pd();
+          temp[k] = IT[k + r * pad_nx] * IT[k + c * pad_nx];
+
+          acc = _mm256_add_pd(acc, temp[k]);
+        }
+        // Take horizontal sum
+        __m128d vlow  = _mm256_castpd256_pd128(acc);
+        __m128d vhigh = _mm256_extractf128_pd(acc, 1); // high 128
+        vlow  = _mm_add_pd(vlow, vhigh);               // reduce down to 128
+
+        __m128d high64 = _mm_unpackhi_pd(vlow, vlow);
+        sum =  _mm_cvtsd_f64(_mm_add_sd(vlow, high64));
+        result[c + r * ny] = (float)sum;
+      }
+    }
+  }
   // Free all allocated memory
   free(row_means);
   free(row_sq_sums);
   free(T);
   free(IT);
+  free(temp);
 }
