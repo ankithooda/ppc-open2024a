@@ -112,8 +112,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     }
   }
 
-  std::cout << "Printing original T \n";
-  print_m(ny, nx, T);
+  // std::cout << "Printing original T \n";
+  // print_m(ny, nx, T);
 
 
   // Zero'd VT
@@ -143,13 +143,15 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     for (unsigned int c = 0; c < pad_nx-1; c++) {
       IT[c + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, T + c * capacity + r * nx);
     }
+    // Fill in the the last vector which can be partially filled.
     mask_bits = nx - ((pad_nx - 1) * capacity);
     pad_mask = _cvtu32_mask8(pow(2, mask_bits) - 1);
     //std::cout << mask_bits << " " << nx - ((pad_nx - 1) * capacity) << " " << nx << " " << pad_nx << "\n";
     IT[pad_nx - 1 + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, T + ((pad_nx - 1) * capacity) + r * nx);
   }
-  std::cout << "Priniting vector matrix \n";
-  print_matrix_vector_double(ny, pad_nx, IT);
+
+  //std::cout << "Priniting vector matrix \n";
+  //print_matrix_vector_double(ny, pad_nx, IT);
 
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < pad_nx; c++) {
@@ -161,12 +163,12 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     }
   }
 
-  std::cout << "Printing Vectorized T \n";
-  for (unsigned int r = 0; r < ny; r++) {
-    for (unsigned int c = 0; c < pad_nx; c++) {
-      print_vec(VT[c + r * pad_nx]);
-    }
-  }
+  // std::cout << "Printing Vectorized T \n";
+  // for (unsigned int r = 0; r < ny; r++) {
+  //   for (unsigned int c = 0; c < pad_nx; c++) {
+  //     print_vec(VT[c + r * pad_nx]);
+  //   }
+  // }
 
 
   // Multiply T with it's transpose; only the upper half.
