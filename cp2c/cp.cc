@@ -124,8 +124,9 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   }
   // Convert T -> VT vectorized form
   // using intrinsics
-  __mmask8 pad_mask = _cvtu32_mask8(15);
+  __mmask8 pad_mask;
   __m256d *IT;
+  int mask_bits;
 
   if (posix_memalign((void**)&IT, 32, ny * pad_nx * capacity * sizeof(double)) != 0) {
     // Return from function, this will cause
@@ -134,31 +135,20 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     return;
   }
 
-  // double *tt = (double *)malloc(capacity * sizeof(double));
-
-  // tt[0] = 1;
-  // tt[1] = 2;
-  // tt[2] = 3;
-  // tt[3] = 4;
-
-  // IT[0] = _mm256_maskz_expandloadu_pd(pad_mask, tt);
-  // print_matrix_vector_double(1, 1, IT);
-  // free(IT);
-  // free(tt);
-
   // Run the loop for pad_nx - 1
   // because pad_nx - 1 vectors will alway be completely filled.
   // Only the last vector can be partially filled.
   for (unsigned int r = 0; r < ny; r++) {
+    pad_mask = _cvtu32_mask8(15);
     for (unsigned int c = 0; c < pad_nx-1; c++) {
-      IT[c] = _mm256_maskz_expandloadu_pd(pad_mask, T + c * capacity);
+      IT[c + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, T + c * capacity + r * nx);
     }
+    mask_bits = nx - ((pad_nx - 1) * capacity);
+    pad_mask = _cvtu32_mask8(pow(2, mask_bits) - 1);
+    //std::cout << mask_bits << " " << nx - ((pad_nx - 1) * capacity) << " " << nx << " " << pad_nx << "\n";
+    IT[pad_nx - 1 + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, T + ((pad_nx - 1) * capacity) + r * nx);
   }
-  int bits = nx - ((pad_nx - 1) * capacity);
-  pad_mask = _cvtu32_mask8(pow(2, bits));
-
-  // Fill last vector;
-  IT[pad_nx - 1] = _mm256_maskz_expandloadu_pd(pad_mask, T + ((pad_nx - 1) * capacity));
+  std::cout << "Priniting vector matrix \n";
   print_matrix_vector_double(ny, pad_nx, IT);
 
   for (unsigned int r = 0; r < ny; r++) {
