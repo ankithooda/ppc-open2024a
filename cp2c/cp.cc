@@ -66,8 +66,9 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // std::cout << "Vector Bounds " <<  ny << " " << pad_nx << "\n";
   // std::cout << "Original Bounds " <<  ny << " " << nx << "\n";
 
-  double *row_sq_sums = (double *)malloc(sizeof(double) * ny);
-  double *row_means = (double *)malloc(sizeof(double) * ny);
+  std::vector<double> row_sq_sums(ny);
+  std::vector<double> row_means(ny);
+
   double *DT = (double *)malloc(sizeof(double) * nx * ny);
 
   // COPY ORIGINAL DATA TO A DOUBLE FLOAT MATRIX
@@ -224,8 +225,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     }
   }
   // Free all allocated memory
-  free(row_means);
-  free(row_sq_sums);
+  //free(row_means);
+  //free(row_sq_sums);
   free(IT);
   free(temp);
   free(DT);
