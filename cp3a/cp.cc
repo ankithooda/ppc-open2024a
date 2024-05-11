@@ -226,9 +226,13 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
       if ( r <= c) {
         double sum = 0;
         __m256d acc = _mm256_setzero_pd();
-        for (unsigned k = 0; k < pad_nx; k++) {
-          acc = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc);
+        __m256d acc0 = _mm256_setzero_pd();
+        __m256d acc1 = _mm256_setzero_pd();
+        for (unsigned k = 0; k < pad_nx; k=k+2) {
+          acc0 = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc);
+          acc1 = _mm256_fmadd_pd(IT[k + 1 + r * pad_nx], IT[k + 1 + c * pad_nx], acc);
         }
+        acc = _mm256_add_pd(acc0, acc1);
         // Take horizontal sum
         __m128d vlow  = _mm256_castpd256_pd128(acc);
         __m128d vhigh = _mm256_extractf128_pd(acc, 1); // high 128
