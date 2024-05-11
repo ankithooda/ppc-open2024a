@@ -72,7 +72,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   double *row_means = (double *)malloc(sizeof(double) * ny);
   double *DT = (double *)malloc(sizeof(double) * nx * ny);
 
-  before = __rdtsc();
+  //before = __rdtsc();
   // COPY ORIGINAL DATA TO A DOUBLE FLOAT MATRIX
   // WHICH WILL ACT AS SOURCE FOR CREATING __m256d MATRIX.
   // This needs to be done because __m256d gets loaded with
@@ -83,8 +83,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
       DT[c + r * nx] = (double)data[c + r * nx];
     }
   }
-  after = __rdtsc();
-  std::cout << after - before << " DT Copy \n";
+  //after = __rdtsc();
+  //std::cout << after - before << " DT Copy \n";
 
   // Vector Matrix
   __mmask8 pad_mask;
@@ -103,7 +103,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // Run the loop for pad_nx - 1
   // because pad_nx - 1 vectors will alway be completely filled.
   // Only the last vector can be partially filled.
-  before = __rdtsc();
+  //before = __rdtsc();
   for (unsigned int r = 0; r < ny; r++) {
     pad_mask = _cvtu32_mask8(15);
     for (unsigned int c = 0; c < pad_nx-1; c++) {
@@ -115,8 +115,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     //std::cout << mask_bits << " " << nx - ((pad_nx - 1) * capacity) << " " << nx << " " << pad_nx << "\n";
     IT[pad_nx - 1 + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, DT + ((pad_nx - 1) * capacity) + r * nx);
   }
-  after = __rdtsc();
-  std::cout << after - before << " Vector Copy \n";
+  //after = __rdtsc();
+  //std::cout << after - before << " Vector Copy \n";
 
   //std::cout << "Printing original data \n";
   //print_m(ny, nx, data);
@@ -126,7 +126,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
   // Vector operations.
   // Calculate Mean for each row using Vector operations.
-  before = __rdtsc();
+  //before = __rdtsc();
   for (unsigned int r = 0; r < ny; r++) {
     double sum = 0;
     __m256d acc = _mm256_setzero_pd();
@@ -165,8 +165,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     pad_mask = _knot_mask8(pad_mask);
     IT[pad_nx - 1 + r * pad_nx] = _mm256_mask_and_pd(IT[pad_nx - 1 + r * pad_nx], pad_mask, IT[pad_nx - 1 + r * pad_nx], zeros);
   }
-  after = __rdtsc();
-  std::cout << after - before << " 1st norm \n";
+  //after = __rdtsc();
+  //std::cout << after - before << " 1st norm \n";
 
   // std::cout << "Priniting vector matrix after mean normalization\n";
   // print_matrix_vector_double(ny, pad_nx, IT);
@@ -174,7 +174,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
   // VECTOR OPS
   // Calculate Squared Sum of this new matrix.
-  before = __rdtsc();
+  //before = __rdtsc();
   for (unsigned int r = 0; r < ny; r++) {
     double sq_sum = 0;
     __m256d acc = _mm256_setzero_pd();
@@ -203,8 +203,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     // We do not need to zero the padded doubles in this normalization.
     // because they were already zero and getting divided by root will also produce zero.
   }
-  after = __rdtsc();
-  std::cout << after - before << " 2nd norm \n";
+  //after = __rdtsc();
+  //std::cout << after - before << " 2nd norm \n";
 
 
   // std::cout << "Priniting vector matrix after sq sum normalization\n";
@@ -212,20 +212,19 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   //free(IT);
 
   // VECTOR IMPLEMENTATION
-  __m256d *temp;
-  if (posix_memalign((void**)&temp, align_boundary,  pad_nx * capacity * sizeof(double)) != 0) {
-    return;
-  }
+  // __m256d *temp;
+  // if (posix_memalign((void**)&temp, align_boundary,  pad_nx * capacity * sizeof(double)) != 0) {
+  //   return;
+  // }
 
-  before = __rdtsc();
+  //before = __rdtsc();
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < ny; c++) {
       if ( r <= c) {
         double sum = 0;
         __m256d acc = _mm256_setzero_pd();
         for (unsigned k = 0; k < pad_nx; k++) {
-          temp[k] = IT[k + r * pad_nx] * IT[k + c * pad_nx];
-          acc = _mm256_add_pd(acc, temp[k]);
+          acc = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc);
         }
         // Take horizontal sum
         __m128d vlow  = _mm256_castpd256_pd128(acc);
@@ -238,12 +237,12 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
       }
     }
   }
-  after = __rdtsc();
-  std::cout << after - before << " Matrix calc \n";
+  //after = __rdtsc();
+  //std::cout << after - before << " Matrix calc \n";
 
   // Free all allocated memory
   free(IT);
-  free(temp);
+  //free(temp);
   free(DT);
   free(row_means);
   free(row_sq_sums);
