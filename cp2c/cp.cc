@@ -102,7 +102,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   for (unsigned int r = 0; r < ny; r++) {
     pad_mask = _cvtu32_mask8(15);
     for (unsigned int c = 0; c < pad_nx-1; c++) {
-      IT[c + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, DT + c * capacity + r * nx);
+      IT[c + r * pad_nx] = _mm256_maskz_loadu_pd(pad_mask, DT + c * capacity + r * nx);
     }
     // Fill in the the last vector which can be partially filled.
     mask_bits = nx - ((pad_nx - 1) * capacity);
@@ -225,8 +225,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     }
   }
   // Free all allocated memory
-  //free(row_means);
-  //free(row_sq_sums);
   free(IT);
   free(temp);
   free(DT);
