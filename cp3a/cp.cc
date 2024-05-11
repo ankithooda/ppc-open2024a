@@ -60,7 +60,7 @@ This is the function you need to implement. Quick reference:
 */
 void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
-  unsigned long before, after;
+  //unsigned long before, after;
   unsigned int ny = (unsigned int)orig_y;
   unsigned int nx = (unsigned int)orig_x;
   unsigned int pad_nx = (nx + capacity - 1) / capacity;
@@ -219,8 +219,11 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // VECTOR IMPLEMENTATION
 
   //before = __rdtsc();
+  unsigned factor = 2;
+  unsigned bound_nx = pad_nx < factor ? factor : pad_nx;
   #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
+    //std::cout << "\n New ROW \n";
     //#pragma omp parallel for
     for (unsigned int c = 0; c < ny; c++) {
       if ( r <= c) {
@@ -228,9 +231,12 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
         __m256d acc = _mm256_setzero_pd();
         __m256d acc0 = _mm256_setzero_pd();
         __m256d acc1 = _mm256_setzero_pd();
-        for (unsigned k = 0; k < pad_nx; k=k+2) {
-          acc0 = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc);
-          acc1 = _mm256_fmadd_pd(IT[k + 1 + r * pad_nx], IT[k + 1 + c * pad_nx], acc);
+
+        for (unsigned k = 0; k < bound_nx; k=k+factor) {
+          //std::cout << bound_nx << " " << pad_nx << " " << r << " " << c << " " << k << "\n\n";
+          acc0 = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc0);
+          if ((k + 1) < pad_nx)
+            acc1 = _mm256_fmadd_pd(IT[k + 1 + r * pad_nx], IT[k + 1 + c * pad_nx], acc1);
         }
         acc = _mm256_add_pd(acc0, acc1);
         // Take horizontal sum
