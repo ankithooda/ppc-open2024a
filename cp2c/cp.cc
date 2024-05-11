@@ -62,14 +62,12 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   unsigned int ny = (unsigned int)orig_y;
   unsigned int nx = (unsigned int)orig_x;
   unsigned int pad_nx = (nx + capacity - 1) / capacity;
-  //unsigned int padding_gap = (pad_nx * capacity) - nx;
 
   // std::cout << "Vector Bounds " <<  ny << " " << pad_nx << "\n";
   // std::cout << "Original Bounds " <<  ny << " " << nx << "\n";
 
   double *row_sq_sums = (double *)malloc(sizeof(double) * ny);
   double *row_means = (double *)malloc(sizeof(double) * ny);
-  double *T = (double *)malloc(sizeof(double) * nx * ny);
   double *DT = (double *)malloc(sizeof(double) * nx * ny);
 
   // COPY ORIGINAL DATA TO A DOUBLE FLOAT MATRIX
@@ -163,29 +161,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // print_matrix_vector_double(ny, pad_nx, IT);
   // free(IT);
 
-  // DELETE IT
-  // Calculate sums and means.
-  for (unsigned int r = 0; r < ny; r++) {
-    double sum = 0;
-    for (unsigned int c = 0; c < nx; c++) {
-      sum = sum + data[c + r * nx];
-    }
-    //row_sums[r] = sum;
-    row_means[r] = sum / nx;
-  }
-
-  // Normalize the matrix so that
-  // for each row arithmetic mean is zero.
-  // This can be done by subtracting
-  // each element of the row by the arithmetic mean of the row.
-
-  for (unsigned int r = 0; r < ny; r++) {
-    for (unsigned int c = 0; c < nx; c++) {
-      T[c + r * nx] = data[c + r * nx] - row_means[r];
-    }
-  }
-  // DELETE END
-
   // VECTOR OPS
   // Calculate Squared Sum of this new matrix.
   for (unsigned int r = 0; r < ny; r++) {
@@ -218,61 +193,9 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   }
 
 
-
-  // DELETE IT
-  // Calculate Squared Sum of this new matrix.
-  for (unsigned int r = 0; r < ny; r++) {
-    double sq_sum = 0;
-
-    for (unsigned int c = 0; c < nx; c++) {
-      sq_sum = sq_sum + T[c + r * nx] * T[c + r * nx];
-    }
-    row_sq_sums[r] = sqrt(sq_sum);
-  }
-
-  // Normalize T matrix so that sum of squared each is zero.
-  for (unsigned int r = 0; r < ny; r++) {
-    for (unsigned int c = 0; c < nx; c++) {
-      T[c + r * nx] = T[c + r * nx] / row_sq_sums[r];
-    }
-  }
-
-
-  //std::cout << "Printing original T \n";
-  //print_m(ny, nx, T);
-  // DELETE END
-
-  // Convert T -> VT vectorized form
-  // using intrinsics
-
-  std::cout << "Priniting vector matrix after sq sum normalization\n";
-  print_matrix_vector_double(ny, pad_nx, IT);
-  free(IT);
-
-  if (posix_memalign((void**)&IT, align_boundary, ny * pad_nx * capacity * sizeof(double)) != 0) {
-    // Return from function, this will cause
-    // address sanitizer issuer in the testing framework
-    // as other memory has not been freed.
-    return;
-  }
-
-  // Run the loop for pad_nx - 1
-  // because pad_nx - 1 vectors will alway be completely filled.
-  // Only the last vector can be partially filled.
-  for (unsigned int r = 0; r < ny; r++) {
-    pad_mask = _cvtu32_mask8(15);
-    for (unsigned int c = 0; c < pad_nx-1; c++) {
-      IT[c + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, T + c * capacity + r * nx);
-    }
-    // Fill in the the last vector which can be partially filled.
-    mask_bits = nx - ((pad_nx - 1) * capacity);
-    pad_mask = _cvtu32_mask8(pow(2, mask_bits) - 1);
-    //std::cout << mask_bits << " " << nx - ((pad_nx - 1) * capacity) << " " << nx << " " << pad_nx << "\n";
-    IT[pad_nx - 1 + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, T + ((pad_nx - 1) * capacity) + r * nx);
-  }
-
-  std::cout << "Priniting vector matrix before calc and converted from T\n";
-  print_matrix_vector_double(ny, pad_nx, IT);
+  // std::cout << "Priniting vector matrix after sq sum normalization\n";
+  // print_matrix_vector_double(ny, pad_nx, IT);
+  //free(IT);
 
   // VECTOR IMPLEMENTATION
   __m256d *temp;
@@ -303,7 +226,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // Free all allocated memory
   free(row_means);
   free(row_sq_sums);
-  free(T);
   free(IT);
   free(temp);
   free(DT);
