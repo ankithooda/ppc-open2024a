@@ -217,10 +217,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   //free(IT);
 
   // VECTOR IMPLEMENTATION
-  __m256d *temp;
-  if (posix_memalign((void**)&temp, align_boundary,  pad_nx * capacity * sizeof(double)) != 0) {
-    return;
-  }
 
   before = __rdtsc();
   #pragma omp parallel for
@@ -231,8 +227,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
         double sum = 0;
         __m256d acc = _mm256_setzero_pd();
         for (unsigned k = 0; k < pad_nx; k++) {
-          temp[k] = IT[k + r * pad_nx] * IT[k + c * pad_nx];
-          acc = _mm256_add_pd(acc, temp[k]);
+          acc = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc);
         }
         // Take horizontal sum
         __m128d vlow  = _mm256_castpd256_pd128(acc);
@@ -250,7 +245,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
   // Free all allocated memory
   free(IT);
-  free(temp);
   free(DT);
   free(row_means);
   free(row_sq_sums);
