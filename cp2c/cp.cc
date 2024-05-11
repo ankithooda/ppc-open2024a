@@ -72,7 +72,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   double *T = (double *)malloc(sizeof(double) * nx * ny);
   double *DT = (double *)malloc(sizeof(double) * nx * ny);
 
-  // Copy original data to a double float matrix.
+  // COPY ORIGINAL DATA TO A DOUBLE FLOAT MATRIX
+  // WHICH WILL ACT AS SOURCE FOR CREATING __m256d MATRIX.
   // This needs to be done because __m256d gets loaded with
   // continuous memory therefore the source memory should be
   // doubles (8-byte) not floats (4-byte).
@@ -87,10 +88,12 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   __m256d *IT;
   int mask_bits;
 
-  if (posix_memalign((void**)&IT, 32, ny * pad_nx * capacity * sizeof(double)) != 0) {
+  if (posix_memalign((void**)&IT, align_boundary, ny * pad_nx * capacity * sizeof(double)) != 0) {
     // Return from function, this will cause
     // address sanitizer issuer in the testing framework
     // as other memory has not been freed.
+    // We dont care if we are not able to allocate memory for the __m256d
+    // all is lost.
     return;
   }
 
@@ -114,9 +117,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
   //std::cout << "Priniting vector matrix \n";
   //print_matrix_vector_double(ny, pad_nx, IT);
-  //free(IT);
-  free(DT);
 
+  // Vector operations.
   // Calculate Mean for each row using Vector operations.
   for (unsigned int r = 0; r < ny; r++) {
     double sum = 0;
@@ -136,7 +138,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     row_means[r] = sum / nx;       // Sum is divided by original nx not pad_nx
   }
 
-  // Vector operations.
   // Normalize the matrix so that
   // for each row arithmetic mean is zero.
   // This can be done by subtracting
@@ -216,9 +217,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     // because they were already zero and getting divided by root will also produce zero.
   }
 
-  std::cout << "Priniting vector matrix after sq sum normalization\n";
-  print_matrix_vector_double(ny, pad_nx, IT);
-  free(IT);
 
 
   // DELETE IT
@@ -240,14 +238,18 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   }
 
 
-  std::cout << "Printing original T \n";
-  print_m(ny, nx, T);
+  //std::cout << "Printing original T \n";
+  //print_m(ny, nx, T);
   // DELETE END
 
   // Convert T -> VT vectorized form
   // using intrinsics
 
-  if (posix_memalign((void**)&IT, 32, ny * pad_nx * capacity * sizeof(double)) != 0) {
+  std::cout << "Priniting vector matrix after sq sum normalization\n";
+  print_matrix_vector_double(ny, pad_nx, IT);
+  free(IT);
+
+  if (posix_memalign((void**)&IT, align_boundary, ny * pad_nx * capacity * sizeof(double)) != 0) {
     // Return from function, this will cause
     // address sanitizer issuer in the testing framework
     // as other memory has not been freed.
@@ -269,12 +271,12 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     IT[pad_nx - 1 + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, T + ((pad_nx - 1) * capacity) + r * nx);
   }
 
-  //std::cout << "Priniting vector matrix \n";
-  //print_matrix_vector_double(ny, pad_nx, IT);
+  std::cout << "Priniting vector matrix before calc and converted from T\n";
+  print_matrix_vector_double(ny, pad_nx, IT);
 
   // VECTOR IMPLEMENTATION
   __m256d *temp;
-  if (posix_memalign((void**)&temp, 32,  pad_nx * capacity * sizeof(double)) != 0) {
+  if (posix_memalign((void**)&temp, align_boundary,  pad_nx * capacity * sizeof(double)) != 0) {
     return;
   }
 
@@ -304,4 +306,5 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   free(T);
   free(IT);
   free(temp);
+  free(DT);
 }
