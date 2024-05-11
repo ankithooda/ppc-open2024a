@@ -3,6 +3,7 @@
 #include <vector>
 #include <immintrin.h>
 #include <cmath>
+#include <x86intrin.h>
 
 constexpr unsigned int capacity = 4; // Vector registers can hold 4 double precision float.
 constexpr int align_boundary = 32;
@@ -59,6 +60,7 @@ This is the function you need to implement. Quick reference:
 */
 void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
+  unsigned long before, after;
   unsigned int ny = (unsigned int)orig_y;
   unsigned int nx = (unsigned int)orig_x;
   unsigned int pad_nx = (nx + capacity - 1) / capacity;
@@ -66,11 +68,11 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // std::cout << "Vector Bounds " <<  ny << " " << pad_nx << "\n";
   // std::cout << "Original Bounds " <<  ny << " " << nx << "\n";
 
-  std::vector<double> row_sq_sums(ny);
-  std::vector<double> row_means(ny);
-
+  double *row_sq_sums = (double *)malloc(sizeof(double) * ny);
+  double *row_means = (double *)malloc(sizeof(double) * ny);
   double *DT = (double *)malloc(sizeof(double) * nx * ny);
 
+  before = __rdtsc();
   // COPY ORIGINAL DATA TO A DOUBLE FLOAT MATRIX
   // WHICH WILL ACT AS SOURCE FOR CREATING __m256d MATRIX.
   // This needs to be done because __m256d gets loaded with
@@ -81,6 +83,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
       DT[c + r * nx] = (double)data[c + r * nx];
     }
   }
+  after = __rdtsc();
+  std::cout << after - before << " DT Copy \n";
 
   // Vector Matrix
   __mmask8 pad_mask;
@@ -99,6 +103,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // Run the loop for pad_nx - 1
   // because pad_nx - 1 vectors will alway be completely filled.
   // Only the last vector can be partially filled.
+  before = __rdtsc();
   for (unsigned int r = 0; r < ny; r++) {
     pad_mask = _cvtu32_mask8(15);
     for (unsigned int c = 0; c < pad_nx-1; c++) {
@@ -110,6 +115,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     //std::cout << mask_bits << " " << nx - ((pad_nx - 1) * capacity) << " " << nx << " " << pad_nx << "\n";
     IT[pad_nx - 1 + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, DT + ((pad_nx - 1) * capacity) + r * nx);
   }
+  after = __rdtsc();
+  std::cout << after - before << " Vector Copy \n";
 
   //std::cout << "Printing original data \n";
   //print_m(ny, nx, data);
@@ -119,6 +126,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
   // Vector operations.
   // Calculate Mean for each row using Vector operations.
+  before = __rdtsc();
   for (unsigned int r = 0; r < ny; r++) {
     double sum = 0;
     __m256d acc = _mm256_setzero_pd();
@@ -157,6 +165,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     pad_mask = _knot_mask8(pad_mask);
     IT[pad_nx - 1 + r * pad_nx] = _mm256_mask_and_pd(IT[pad_nx - 1 + r * pad_nx], pad_mask, IT[pad_nx - 1 + r * pad_nx], zeros);
   }
+  after = __rdtsc();
+  std::cout << after - before << " 1st norm \n";
 
   // std::cout << "Priniting vector matrix after mean normalization\n";
   // print_matrix_vector_double(ny, pad_nx, IT);
@@ -164,6 +174,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
   // VECTOR OPS
   // Calculate Squared Sum of this new matrix.
+  before = __rdtsc();
   for (unsigned int r = 0; r < ny; r++) {
     double sq_sum = 0;
     __m256d acc = _mm256_setzero_pd();
@@ -192,6 +203,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     // We do not need to zero the padded doubles in this normalization.
     // because they were already zero and getting divided by root will also produce zero.
   }
+  after = __rdtsc();
+  std::cout << after - before << " 2nd norm \n";
 
 
   // std::cout << "Priniting vector matrix after sq sum normalization\n";
@@ -204,6 +217,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     return;
   }
 
+  before = __rdtsc();
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < ny; c++) {
       if ( r <= c) {
@@ -224,8 +238,13 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
       }
     }
   }
+  after = __rdtsc();
+  std::cout << after - before << " Matrix calc \n";
+
   // Free all allocated memory
   free(IT);
   free(temp);
   free(DT);
+  free(row_means);
+  free(row_sq_sums);
 }
