@@ -255,7 +255,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
   #pragma omp parallel for
   for (unsigned int r = 0; r < bound_r; r = r + 2) {
-    //#pragma omp parallel for
+    #pragma omp parallel for
     for (unsigned int c = 0; c < bound_c; c = c + 2) {
       //if (r > c) {continue;}       // Go to next r, c pair
 
@@ -284,17 +284,27 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
       // [r0,c0] [r0, c1] [r1, c0] [r1, c1]
       // Calculate all 4 accs in one single loop
       for (unsigned k = 0; k < pad_nx; k++) {
+        // __m256d regs[4];
+        // regs[0] = IT[k + r0 * pad_nx];      // IT[k + r0 * pad_nx]
+        // regs[1] = IT[k + c0 * pad_nx];      // IT[k + c0 * pad_nx]
+        // regs[2] = IT[k + c1 * pad_nx];      // IT[k + c1 * pad_nx]
+        // regs[3] = IT[k + r1 * pad_nx];      // IT[k + r1 * pad_nx]
+
         if (r0 <= c0 && r0 < ny && c0 < ny) {
           acc4[0] = _mm256_fmadd_pd(IT[k + r0 * pad_nx], IT[k + c0 * pad_nx], acc4[0]);
+          //acc4[0] = _mm256_fmadd_pd(regs[0], regs[1], acc4[0]);
         }
         if (r0 <= c1 && r0 < ny && c1 < ny) {
           acc4[1] = _mm256_fmadd_pd(IT[k + r0 * pad_nx], IT[k + c1 * pad_nx], acc4[1]);
+          //acc4[1] = _mm256_fmadd_pd(regs[0], regs[2], acc4[1]);
         }
         if (r0 <= c0 && r1 < ny && c0 < ny) {
           acc4[2] = _mm256_fmadd_pd(IT[k + r1 * pad_nx], IT[k + c0 * pad_nx], acc4[2]);
+          //acc4[2] = _mm256_fmadd_pd(regs[3], regs[1], acc4[2]);
         }
         if (r0 <= c1 && r1 < ny && c1 < ny) {
           acc4[3] = _mm256_fmadd_pd(IT[k + r1 * pad_nx], IT[k + c1 * pad_nx], acc4[3]);
+          //acc4[3] = _mm256_fmadd_pd(regs[3], regs[2], acc4[3]);
         }
       }
 
