@@ -261,9 +261,10 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
         __m256d acc1 = _mm256_setzero_pd();
         for (unsigned k = 0; k < bound_nx; k=k+factor) {
           acc0 = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc0);
-          if ((k + 1) < pad_nx) {
-            acc1 = _mm256_fmadd_pd(IT[(k + 1) + r * pad_nx], IT[(k + 1) + c * pad_nx], acc1);
-          }
+
+          if ((k + 1) >= pad_nx) {break;} // Break if we are beyond the pad_nx bound.
+
+          acc1 = _mm256_fmadd_pd(IT[(k + 1) + r * pad_nx], IT[(k + 1) + c * pad_nx], acc1);
         }
         acc = _mm256_add_pd(acc0, acc1);
         // Take horizontal sum

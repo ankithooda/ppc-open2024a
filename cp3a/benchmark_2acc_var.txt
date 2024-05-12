@@ -1,0 +1,27 @@
+➜  cp3a git:(master) ✗ setarch -R ./grading benchmark benchmarks/2d.txt                   
+Running benchmark
+Compiling...
+Compiled
+test                    time  result
+benchmarks/2d.txt     1.085s  pass
+
+Standard output:
+8091137 DT Copy 
+28096383 Vector Copy 
+11881245 1st norm 
+8663293 2nd norm 
+2972568860 Matrix calc
+
+  Your code used 1.085 sec of wallclock time, and 5.708 sec of CPU time
+  ≈ you used 5.3 simultaneous hardware threads on average
+
+  The total number of clock cycles was 20.8 billion
+  ≈ CPU was running at 3.6 GHz
+
+  The CPU executed 18.42 billion machine-language instructions
+  ≈ 16.98 instructions per nanosecond
+  ≈ 0.89 instructions per clock cycle
+
+  11.2% of the instructions were branches
+  and 0.4% of them were mispredicted
+
