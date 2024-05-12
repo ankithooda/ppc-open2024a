@@ -72,19 +72,29 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   double *row_means = (double *)malloc(sizeof(double) * ny);
   double *DT = (double *)malloc(sizeof(double) * nx * ny);
 
-  //before = __rdtsc();
+  /////////////////////////////// DOUBLE FLOAT COPY ////////////////////////////
+  ///
+  ///                             PARALLEL OK       ////////////////////////////
+  ///
+  //////////////////////////////////////////////////////////////////////////////
   // COPY ORIGINAL DATA TO A DOUBLE FLOAT MATRIX
   // WHICH WILL ACT AS SOURCE FOR CREATING __m256d MATRIX.
   // This needs to be done because __m256d gets loaded with
   // continuous memory therefore the source memory should be
   // doubles (8-byte) not floats (4-byte).
+  before = __rdtsc();
+  #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < nx; c++) {
       DT[c + r * nx] = (double)data[c + r * nx];
     }
   }
-  //after = __rdtsc();
-  //std::cout << after - before << " DT Copy \n";
+  after = __rdtsc();
+  std::cout << after - before << " DT Copy \n";
+
+  /////////////////////////////// DOUBLE FLOAT COPY END ////////////////////////////
+  //////////////////////////////////////////////////////////////////////////////////
+
 
   // Vector Matrix
   __mmask8 pad_mask;
@@ -100,10 +110,17 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     return;
   }
 
+  /////////////////////////////// VECTOR COPY //////////////////////////////////
+  ///
+  ///                             PARALLEL NOT OK  ////////////////////////////
+  ///
+  /////////////////////////////////////////////////////////////////////////////
+
   // Run the loop for pad_nx - 1
   // because pad_nx - 1 vectors will alway be completely filled.
   // Only the last vector can be partially filled.
-  //before = __rdtsc();
+  before = __rdtsc();
+  //#pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     pad_mask = _cvtu32_mask8(15);
     for (unsigned int c = 0; c < pad_nx-1; c++) {
@@ -115,18 +132,24 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     //std::cout << mask_bits << " " << nx - ((pad_nx - 1) * capacity) << " " << nx << " " << pad_nx << "\n";
     IT[pad_nx - 1 + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, DT + ((pad_nx - 1) * capacity) + r * nx);
   }
-  //after = __rdtsc();
-  //std::cout << after - before << " Vector Copy \n";
+  after = __rdtsc();
+  std::cout << after - before << " Vector Copy \n";
 
-  //std::cout << "Printing original data \n";
-  //print_m(ny, nx, data);
+  /////////////////////////////// VECTOR COPY END ///////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////////
 
-  //std::cout << "Priniting vector matrix \n";
-  //print_matrix_vector_double(ny, pad_nx, IT);
+
+  /////////////////////////////// 1st NORMAL //////////////////////////////////
+  ///
+  ///                             PARALLEL NOT OK  ////////////////////////////
+  ///
+  /////////////////////////////////////////////////////////////////////////////
 
   // Vector operations.
   // Calculate Mean for each row using Vector operations.
-  //before = __rdtsc();
+  before = __rdtsc();
+
+  //#pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     double sum = 0;
     __m256d acc = _mm256_setzero_pd();
@@ -149,7 +172,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // for each row arithmetic mean is zero.
   // This can be done by subtracting
   // each element of the row by the arithmetic mean of the row.
-
+  //#pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     __m256d mean = _mm256_set_pd(row_means[r], row_means[r], row_means[r], row_means[r]);
     __m256d zeros = _mm256_setzero_pd();
@@ -165,16 +188,23 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     pad_mask = _knot_mask8(pad_mask);
     IT[pad_nx - 1 + r * pad_nx] = _mm256_mask_and_pd(IT[pad_nx - 1 + r * pad_nx], pad_mask, IT[pad_nx - 1 + r * pad_nx], zeros);
   }
-  //after = __rdtsc();
-  //std::cout << after - before << " 1st norm \n";
+  after = __rdtsc();
+  std::cout << after - before << " 1st norm \n";
 
-  // std::cout << "Priniting vector matrix after mean normalization\n";
-  // print_matrix_vector_double(ny, pad_nx, IT);
-  // free(IT);
+  /////////////////////////////// 1st NORMAL END   //////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+
+
+  /////////////////////////////// 2nd NORMAL //////////////////////////////////
+  ///
+  ///                             PARALLEL OK      ////////////////////////////
+  ///
+  /////////////////////////////////////////////////////////////////////////////
 
   // VECTOR OPS
   // Calculate Squared Sum of this new matrix.
-  //before = __rdtsc();
+  before = __rdtsc();
+  #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     double sq_sum = 0;
     __m256d acc = _mm256_setzero_pd();
@@ -194,6 +224,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   }
 
   // Normalize T matrix so that sum of squared each is zero.
+  #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     __m256d root = _mm256_set_pd(row_sq_sums[r], row_sq_sums[r], row_sq_sums[r], row_sq_sums[r]);
 
@@ -203,29 +234,38 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     // We do not need to zero the padded doubles in this normalization.
     // because they were already zero and getting divided by root will also produce zero.
   }
-  //after = __rdtsc();
-  //std::cout << after - before << " 2nd norm \n";
+  after = __rdtsc();
+  std::cout << after - before << " 2nd norm \n";
+
+  /////////////////////////////// 2nd NORMAL END //////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////////
 
 
-  // std::cout << "Priniting vector matrix after sq sum normalization\n";
-  // print_matrix_vector_double(ny, pad_nx, IT);
-  //free(IT);
+  /////////////////////////////// MATRIX MULT //////////////////////////////////
+  ///
+  ///                             PARALLEL OK      ////////////////////////////
+  ///
+  /////////////////////////////////////////////////////////////////////////////
 
-  // VECTOR IMPLEMENTATION
-  // __m256d *temp;
-  // if (posix_memalign((void**)&temp, align_boundary,  pad_nx * capacity * sizeof(double)) != 0) {
-  //   return;
-  // }
-
-  //before = __rdtsc();
+  before = __rdtsc();
+  unsigned factor = 2;
+  unsigned bound_nx = pad_nx < factor ? factor : pad_nx;
+  #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
+    //#pragma omp parallel for
     for (unsigned int c = 0; c < ny; c++) {
       if ( r <= c) {
         double sum = 0;
         __m256d acc = _mm256_setzero_pd();
-        for (unsigned k = 0; k < pad_nx; k++) {
-          acc = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc);
+        __m256d acc0 = _mm256_setzero_pd();
+        __m256d acc1 = _mm256_setzero_pd();
+        for (unsigned k = 0; k < bound_nx; k=k+2) {
+          acc0 = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc0);
+          if ((k + 1) < pad_nx) {
+            acc1 = _mm256_fmadd_pd(IT[(k + 1) + r * pad_nx], IT[(k + 1) + c * pad_nx], acc1);
+          }
         }
+        acc = _mm256_add_pd(acc0, acc1);
         // Take horizontal sum
         __m128d vlow  = _mm256_castpd256_pd128(acc);
         __m128d vhigh = _mm256_extractf128_pd(acc, 1); // high 128
@@ -237,8 +277,11 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
       }
     }
   }
-  //after = __rdtsc();
-  //std::cout << after - before << " Matrix calc \n";
+  after = __rdtsc();
+  std::cout << after - before << " Matrix calc \n";
+
+  /////////////////////////////// MATRIX MULT END //////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
 
   // Free all allocated memory
   free(IT);
