@@ -255,7 +255,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
   #pragma omp parallel for
   for (unsigned int r = 0; r < bound_r; r = r + 3) {
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for (unsigned int c = 0; c < bound_c; c = c + 3) {
       //if (r > c) {continue;}       // Go to next r, c pair
 
@@ -288,6 +288,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
       // [r2, c0] [r2, c1] [r2, c2]
 
       // Calculate all 9 accs in one single loop
+
       for (unsigned k = 0; k < pad_nx; k++) {
         //[r0, c0] [r0, c1] [r0, c2]
         if (r0 <= c0 && r0 < ny && c0 < ny) {
