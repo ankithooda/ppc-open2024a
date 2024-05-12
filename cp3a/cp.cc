@@ -60,7 +60,7 @@ This is the function you need to implement. Quick reference:
 */
 void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
-  //unsigned long before, after;
+  unsigned long before, after;
   unsigned int ny = (unsigned int)orig_y;
   unsigned int nx = (unsigned int)orig_x;
   unsigned int pad_nx = (nx + capacity - 1) / capacity;
@@ -78,7 +78,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // This needs to be done because __m256d gets loaded with
   // continuous memory therefore the source memory should be
   // doubles (8-byte) not floats (4-byte).
-  #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < nx; c++) {
       DT[c + r * nx] = (double)data[c + r * nx];
@@ -105,7 +104,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // because pad_nx - 1 vectors will alway be completely filled.
   // Only the last vector can be partially filled.
   //before = __rdtsc();
-  #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     pad_mask = _cvtu32_mask8(15);
     for (unsigned int c = 0; c < pad_nx-1; c++) {
@@ -129,7 +127,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // Vector operations.
   // Calculate Mean for each row using Vector operations.
   //before = __rdtsc();
-  #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     double sum = 0;
     __m256d acc = _mm256_setzero_pd();
@@ -152,7 +149,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // for each row arithmetic mean is zero.
   // This can be done by subtracting
   // each element of the row by the arithmetic mean of the row.
-  #pragma omp parallel for
+
   for (unsigned int r = 0; r < ny; r++) {
     __m256d mean = _mm256_set_pd(row_means[r], row_means[r], row_means[r], row_means[r]);
     __m256d zeros = _mm256_setzero_pd();
@@ -178,7 +175,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // VECTOR OPS
   // Calculate Squared Sum of this new matrix.
   //before = __rdtsc();
-  #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     double sq_sum = 0;
     __m256d acc = _mm256_setzero_pd();
@@ -198,7 +194,6 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   }
 
   // Normalize T matrix so that sum of squared each is zero.
-  #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     __m256d root = _mm256_set_pd(row_sq_sums[r], row_sq_sums[r], row_sq_sums[r], row_sq_sums[r]);
 
@@ -217,28 +212,20 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   //free(IT);
 
   // VECTOR IMPLEMENTATION
+  // __m256d *temp;
+  // if (posix_memalign((void**)&temp, align_boundary,  pad_nx * capacity * sizeof(double)) != 0) {
+  //   return;
+  // }
 
   //before = __rdtsc();
-  unsigned factor = 2;
-  unsigned bound_nx = pad_nx < factor ? factor : pad_nx;
-  #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
-    //std::cout << "\n New ROW \n";
-    //#pragma omp parallel for
     for (unsigned int c = 0; c < ny; c++) {
       if ( r <= c) {
         double sum = 0;
         __m256d acc = _mm256_setzero_pd();
-        __m256d acc0 = _mm256_setzero_pd();
-        __m256d acc1 = _mm256_setzero_pd();
-
-        for (unsigned k = 0; k < bound_nx; k=k+factor) {
-          //std::cout << bound_nx << " " << pad_nx << " " << r << " " << c << " " << k << "\n\n";
-          acc0 = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc0);
-          if ((k + 1) < pad_nx)
-            acc1 = _mm256_fmadd_pd(IT[k + 1 + r * pad_nx], IT[k + 1 + c * pad_nx], acc1);
+        for (unsigned k = 0; k < pad_nx; k++) {
+          acc = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc);
         }
-        acc = _mm256_add_pd(acc0, acc1);
         // Take horizontal sum
         __m128d vlow  = _mm256_castpd256_pd128(acc);
         __m128d vhigh = _mm256_extractf128_pd(acc, 1); // high 128
@@ -255,6 +242,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
   // Free all allocated memory
   free(IT);
+  //free(temp);
   free(DT);
   free(row_means);
   free(row_sq_sums);
