@@ -248,21 +248,21 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   /////////////////////////////////////////////////////////////////////////////
 
   //before = __rdtsc();
-  unsigned factor = 2;
+  unsigned factor = 3;
   //unsigned bound_nx = pad_nx < factor ? factor : pad_nx;
   unsigned bound_r, bound_c;
   bound_r = bound_c = ny < factor ? factor : ny;
 
   #pragma omp parallel for
-  for (unsigned int r = 0; r < bound_r; r = r + 2) {
+  for (unsigned int r = 0; r < bound_r; r = r + 3) {
     #pragma omp parallel for
-    for (unsigned int c = 0; c < bound_c; c = c + 2) {
+    for (unsigned int c = 0; c < bound_c; c = c + 3) {
       //if (r > c) {continue;}       // Go to next r, c pair
 
       // Iterate on all 4 results simlultaneously
       // Get memory for 4 accumulators & 4 double sums
-      __m256d acc4[4];
-      double sum4[4];
+      __m256d acc4[9];
+      double sum4[9];
       // if (posix_memalign((void**)&acc4, align_boundary, factor * factor * capacity * sizeof(double)) != 0) {
       //   ;
       // }
@@ -274,37 +274,52 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
         sum4[a] = 0;
       }
 
-      // 4 values for r + 0, r + 1, c + 0, c + 1
+      // 6 values for r + 0, r + 1, r + 2, c + 0, c + 1, c + 2
       unsigned int r0 = r;
       unsigned int r1 = r + 1;
+      unsigned int r2 = r + 2;
       unsigned int c0 = c;
       unsigned int c1 = c + 1;
+      unsigned int c2 = c + 2;
 
-      // We have four result cells
-      // [r0,c0] [r0, c1] [r1, c0] [r1, c1]
-      // Calculate all 4 accs in one single loop
+      // We have 9 result cells
+      // [r0, c0] [r0, c1] [r0, c2]
+      // [r1, c0] [r1, c1] [r1, c2]
+      // [r2, c0] [r2, c1] [r2, c2]
+
+      // Calculate all 9 accs in one single loop
       for (unsigned k = 0; k < pad_nx; k++) {
-        // __m256d regs[4];
-        // regs[0] = IT[k + r0 * pad_nx];      // IT[k + r0 * pad_nx]
-        // regs[1] = IT[k + c0 * pad_nx];      // IT[k + c0 * pad_nx]
-        // regs[2] = IT[k + c1 * pad_nx];      // IT[k + c1 * pad_nx]
-        // regs[3] = IT[k + r1 * pad_nx];      // IT[k + r1 * pad_nx]
-
+        //[r0, c0] [r0, c1] [r0, c2]
         if (r0 <= c0 && r0 < ny && c0 < ny) {
           acc4[0] = _mm256_fmadd_pd(IT[k + r0 * pad_nx], IT[k + c0 * pad_nx], acc4[0]);
-          //acc4[0] = _mm256_fmadd_pd(regs[0], regs[1], acc4[0]);
         }
         if (r0 <= c1 && r0 < ny && c1 < ny) {
           acc4[1] = _mm256_fmadd_pd(IT[k + r0 * pad_nx], IT[k + c1 * pad_nx], acc4[1]);
-          //acc4[1] = _mm256_fmadd_pd(regs[0], regs[2], acc4[1]);
         }
-        if (r0 <= c0 && r1 < ny && c0 < ny) {
-          acc4[2] = _mm256_fmadd_pd(IT[k + r1 * pad_nx], IT[k + c0 * pad_nx], acc4[2]);
-          //acc4[2] = _mm256_fmadd_pd(regs[3], regs[1], acc4[2]);
+        if (r0 <= c2 && r0 < ny && c2 < ny) {
+          acc4[2] = _mm256_fmadd_pd(IT[k + r0 * pad_nx], IT[k + c2 * pad_nx], acc4[2]);
         }
-        if (r0 <= c1 && r1 < ny && c1 < ny) {
-          acc4[3] = _mm256_fmadd_pd(IT[k + r1 * pad_nx], IT[k + c1 * pad_nx], acc4[3]);
-          //acc4[3] = _mm256_fmadd_pd(regs[3], regs[2], acc4[3]);
+
+        // [r1, c0] [r1, c1] [r1, c2]
+        if (r1 <= c0 && r1 < ny && c0 < ny) {
+          acc4[3] = _mm256_fmadd_pd(IT[k + r1 * pad_nx], IT[k + c0 * pad_nx], acc4[3]);
+        }
+        if (r1 <= c1 && r1 < ny && c1 < ny) {
+          acc4[4] = _mm256_fmadd_pd(IT[k + r1 * pad_nx], IT[k + c1 * pad_nx], acc4[4]);
+        }
+        if (r1 <= c2 && r1 < ny && c2 < ny) {
+          acc4[5] = _mm256_fmadd_pd(IT[k + r1 * pad_nx], IT[k + c2 * pad_nx], acc4[5]);
+        }
+
+        // [r2, c0] [r2, c1] [r2, c2]
+        if (r2 <= c0 && r2 < ny && c0 < ny) {
+          acc4[6] = _mm256_fmadd_pd(IT[k + r2 * pad_nx], IT[k + c0 * pad_nx], acc4[6]);
+        }
+        if (r2 <= c1 && r2 < ny && c1 < ny) {
+          acc4[7] = _mm256_fmadd_pd(IT[k + r2 * pad_nx], IT[k + c1 * pad_nx], acc4[7]);
+        }
+        if (r2 <= c2 && r2 < ny && c2 < ny) {
+          acc4[8] = _mm256_fmadd_pd(IT[k + r2 * pad_nx], IT[k + c2 * pad_nx], acc4[8]);
         }
       }
 
@@ -322,14 +337,35 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
       if (r0 <= c0 && r0 < ny && c0 < ny) {
         result[c0 + r0 * ny] = (float)sum4[0];
       }
+
       if (r0 <= c1 && r0 < ny && c1 < ny) {
         result[c1 + r0 * ny] = (float)sum4[1];
       }
-      if (r0 <= c0 && r1 < ny && c0 < ny) {
-        result[c0 + r1 * ny] = (float)sum4[2];
+
+      if (r0 <= c2 && r0 < ny && c2 < ny) {
+        result[c2 + r0 * ny] = (float)sum4[2];
       }
-      if (r0 <= c1 && r1 < ny && c1 < ny) {
-        result[c1 + r1 * ny] = (float)sum4[3];
+      ///////////////////////////////////////////////////////////
+      if (r1 <= c0 && r1 < ny && c0 < ny) {
+        result[c0 + r1 * ny] = (float)sum4[3];
+      }
+
+      if (r1 <= c1 && r1 < ny && c1 < ny) {
+        result[c1 + r1 * ny] = (float)sum4[4];
+      }
+
+      if (r1 <= c2 && r1 < ny && c2 < ny) {
+        result[c2 + r1 * ny] = (float)sum4[5];
+      }
+      ///////////////////////////////////////////////////////////
+      if (r2 <= c0 && r2 < ny && c0 < ny) {
+        result[c0 + r2 * ny] = (float)sum4[6];
+      }
+      if (r2 <= c1 && r2 < ny && c1 < ny) {
+        result[c1 + r2 * ny] = (float)sum4[7];
+      }
+      if (r2 <= c2 && r2 < ny && c2 < ny) {
+        result[c2 + r2 * ny] = (float)sum4[8];
       }
     }
   }
