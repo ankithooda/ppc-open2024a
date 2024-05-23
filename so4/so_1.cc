@@ -45,18 +45,17 @@ void my_merge_serial(int start,int mid, int end, data_t *data) {
   free(temp);
 }
 
-int custom_bs(int start, int end, data_t value, data_t *data) {
-  if (end == start) {
-    return end;
+int bs_rightmost(int start, int end, data_t value, data_t *data) {
+  while (start < end) {
+    int mid = (end + start) / 2;
+
+    if (data[mid] < value) {
+      start = mid + 1;
+    } else {
+      end = mid;
+    }
   }
-  unsigned mid = (end + start) / 2;
-  if (data[mid] == value) {
-    return mid;
-  } else if (data[mid] < value) {
-    return custom_bs(mid + 1, end, value, data);
-  } else {
-    return custom_bs(start, mid, value, data);
-  }
+  return start;
 }
 
 // s1 <= e1 <= s2 <= e2                     (All indices on data)
@@ -77,9 +76,9 @@ void my_merge_parallel(
   int d2 = e2 - s2;
   std::cout << "BASE CASE " << d1 << " " << d2 << "\n";
 
-  if (d1 <= 0 || d2 <= 0) {
-    return;
-  }
+  //if (d1 <= 0 || d2 <= 0) {
+  //  return;
+  //}
 
   unsigned s3, e3;           // Index bounds for the larger list from the two.
   unsigned s4, e4;           // Index bounds for the smaller list from the two.
@@ -99,11 +98,14 @@ void my_merge_parallel(
     e4 = e2;
     large_mid = (e1 + s1) / 2;
   }
+  if ((e3 - s3) <= 0) {
+    return;
+  }
   m_value = data[large_mid];
 
   // mid_l is an index value
   // Binary search on the smaller list.
-  unsigned found = custom_bs(s4, e4, m_value, data);
+  unsigned found = bs_rightmost(s4, e4, m_value, data);
 
   // mid point of scratch would be first half elements of largest array
   // + first half element of smaller array)
@@ -114,8 +116,8 @@ void my_merge_parallel(
   scratch[mid_scratch] = m_value;
 
   // Setup the recursion
-  my_merge_parallel(s3, large_mid, s4, found + 1, data, scratch_start, mid_scratch, scratch);
-  my_merge_parallel(large_mid, e3, found + 1, e4, data, mid_scratch + 1, scratch_end, scratch);
+  my_merge_parallel(s3, large_mid, s4, found, data, scratch_start, mid_scratch, scratch);
+  my_merge_parallel(large_mid+1, e3, found, e4, data, mid_scratch + 1, scratch_end, scratch);
 
   // Final copy back to the main memory
   std::memcpy(data + s1, scratch + scratch_start, (scratch_end-scratch_start) * sizeof(data_t));
@@ -162,7 +164,7 @@ void print_l(int n, data_t *data) {
 
 int main() {
 
-  const int count = 3;
+  const int count = 12;
   data_t *data = (data_t *)malloc(count * sizeof(data_t));
   data_t *scratch = (data_t *)malloc(count * sizeof(data_t));
 
@@ -173,9 +175,9 @@ int main() {
     data[i] = (data_t)dist(gen);
   }
   unsigned long before, after;
-  data[0] = 3;
-  data[1] = 5;
-  data[2] = 1;
+  // data[0] = 3;
+  // data[1] = 5;
+  // data[2] = 1;
   //data[3] = 4;
   print_l(count, data);
 
