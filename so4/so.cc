@@ -7,14 +7,24 @@
 
 typedef unsigned long long data_t;
 
-void my_merge_serial(unsigned int start,unsigned int mid, unsigned int end, data_t *data) {
+void my_merge_serial(
+                     int s1,
+                     int e1,
+                     int s2,
+                     int e2,
+                     data_t *data,
+                     int scratch_start,
+                     int scratch_end,
+                     data_t *scratch
+                     ) {
 
-  data_t *temp = (data_t *)malloc((end - start) * sizeof(data_t));
-  unsigned int i1 = start;
-  unsigned int i2 = mid;
-  unsigned t = 0;
+  //data_t *temp = (data_t *)malloc((end - start) * sizeof(data_t));
+  data_t *temp = scratch + scratch_start;
+  int i1 = s1;
+  int i2 = s2;
+  int t = 0;
 
-  while(i1 < mid && i2 < end ) {
+  while(i1 < e1 && i2 < e2 ) {
     if (data[i1] < data[i2]) {
       temp[t] = data[i1];
       i1++;
@@ -25,22 +35,22 @@ void my_merge_serial(unsigned int start,unsigned int mid, unsigned int end, data
     t++;
   }
 
-  while (i1 < mid) {
+  while (i1 < e1) {
     temp[t] = data[i1];
     i1++;
     t++;
   }
 
-  while (i2 < end) {
+  while (i2 < e2) {
     temp[t] = data[i2];
     i2++;
     t++;
   }
 
   // Final copy back to the main memory
-  std::memcpy(data + start, temp, (end-start) * sizeof(data_t));
+  //std::memcpy(data + start, temp, (end-start) * sizeof(data_t));
 
-  free(temp);
+  //free(temp);
 }
 
 int bs_leftmost(int start, int end, data_t value, data_t *data) {
@@ -71,6 +81,11 @@ void my_merge_parallel(
 
   int d1 = e1 - s1;
   int d2 = e2 - s2;
+
+  if (d1 > 100 || d2 > 100) {
+    my_merge_serial(s1, e1, s2, e2, data, scratch_start, scratch_end, scratch);
+    return;
+  }
 
   unsigned s3, e3;           // Index bounds for the larger list from the two.
   unsigned s4, e4;           // Index bounds for the smaller list from the two.
@@ -109,16 +124,22 @@ void my_merge_parallel(
   scratch[mid_scratch] = m_value;
 
   // Setup the recursion
-  #pragma omp task
+#pragma omp parallel
   {
-  my_merge_parallel(s3, large_mid, s4, found, data, scratch_start, mid_scratch, scratch);
-  }
+#pragma omp single
+    {
 
-  #pragma omp task
-  {
-  my_merge_parallel(large_mid+1, e3, found, e4, data, mid_scratch + 1, scratch_end, scratch);
-  }
+#pragma omp task
+      {
+        my_merge_parallel(s3, large_mid, s4, found, data, scratch_start, mid_scratch, scratch);
+      }
 
+#pragma omp task
+      {
+        my_merge_parallel(large_mid+1, e3, found, e4, data, mid_scratch + 1, scratch_end, scratch);
+      }
+    }
+  }
   #pragma omp taskwait
   {
     return;
@@ -143,14 +164,20 @@ void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
   }
   unsigned mid = (high + low) / 2;
 
-  #pragma omp task
+#pragma omp parallel
   {
-  my_sort_partial(low, mid, data, scratch);
-  }
+    #pragma omp single
+    {
+#pragma omp task
+      {
+        my_sort_partial(low, mid, data, scratch);
+      }
 
-  #pragma omp task
-  {
-  my_sort_partial(mid, high, data, scratch);
+#pragma omp task
+      {
+        my_sort_partial(mid, high, data, scratch);
+      }
+    }
   }
 #pragma omp taskwait
   {
