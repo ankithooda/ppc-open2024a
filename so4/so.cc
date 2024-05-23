@@ -43,35 +43,40 @@ void my_merge_serial(unsigned int start,unsigned int mid, unsigned int end, data
   free(temp);
 }
 
-unsigned int custom_bs(unsigned int start, unsigned int end, data_t value, data_t *data) {
-  if (end == start) {
-    return end;
+int bs_rightmost(int start, int end, data_t value, data_t *data) {
+  while (start < end) {
+    int mid = (end + start) / 2;
+
+    if (data[mid] < value) {
+      start = mid + 1;
+    } else {
+      end = mid;
+    }
   }
-  unsigned mid = (end + start) / 2;
-  if (data[mid] == value) {
-    return mid;
-  } else if (data[mid] < value) {
-    return custom_bs(mid + 1, end, value, data);
-  } else {
-    return custom_bs(start, mid, value, data);
-  }
+  return start;
 }
 
 // s1 <= e1 <= s2 <= e2                     (All indices on data)
 // scratch_start <= scratch_end             (All indices on scratch)
 void my_merge_parallel(
-                       unsigned int s1,
-                       unsigned int e1,
-                       unsigned int s2,
-                       unsigned int e2,
+                       int s1,
+                       int e1,
+                       int s2,
+                       int e2,
                        data_t *data,
-                       unsigned int scratch_start,
-                       unsigned int scratch_end,
+                       int scratch_start,
+                       int scratch_end,
                        data_t *scratch
                        ) {
 
-  unsigned d1 = e1 - s1;
-  unsigned d2 = e2 - s2;
+  //std::cout << "MERGE " << s1 << " " << e1 << " " << s2 << " " << e2 << " " << scratch_start << " " << scratch_end << "\n";
+  int d1 = e1 - s1;
+  int d2 = e2 - s2;
+  //std::cout << "BASE CASE " << d1 << " " << d2 << "\n";
+
+  //if (d1 <= 0 || d2 <= 0) {
+  //  return;
+  //}
 
   unsigned s3, e3;           // Index bounds for the larger list from the two.
   unsigned s4, e4;           // Index bounds for the smaller list from the two.
@@ -91,41 +96,33 @@ void my_merge_parallel(
     e4 = e2;
     large_mid = (e1 + s1) / 2;
   }
+  if ((e3 - s3) <= 0) {
+    return;
+  }
   m_value = data[large_mid];
 
   // mid_l is an index value
   // Binary search on the smaller list.
-  unsigned found = custom_bs(s4, e4, m_value, data);
+  unsigned found = bs_rightmost(s4, e4, m_value, data);
 
   // mid point of scratch would be first half elements of largest array
   // + first half element of smaller array)
 
-  unsigned mid_scratch = (large_mid - s3) + (found - s4) + 1;
+  unsigned mid_scratch = scratch_start + (large_mid - s3) + (found - s4);
 
   // Set the min value of the scratch buffer
   scratch[mid_scratch] = m_value;
 
-  // First Half
-  unsigned int half1_1 = s3;
-  unsigned int half1_2 = large_mid;
-
-  // Second Half
-  unsigned int half2_1 = ;
-  unsigned int half2_2 = end;
-
   // Setup the recursion
-
-  my_merge_parallel(s3, large_mid, s4, found + 1, data, scratch_start, mid_scratch, scratch);
-  my_merge_parallel(large_mid, e3, found + 1, e4, data, mid_scratch + 1, scratch_end, scratch);
+  my_merge_parallel(s3, large_mid, s4, found, data, scratch_start, mid_scratch, scratch);
+  my_merge_parallel(large_mid+1, e3, found, e4, data, mid_scratch + 1, scratch_end, scratch);
 
   // Final copy back to the main memory
-  std::memcpy(data + start, temp, (end-start) * sizeof(data_t));
-
+  //std::memcpy(data + s3, scratch + scratch_start, (scratch_end-scratch_start) * sizeof(data_t));
 
 }
 
-// data[low, high)
-void my_sort_partial(unsigned int low, unsigned int high, data_t *data) {
+void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
   //std::cout << "SORT " << low << " " << high << "\n";
   // If data range contains only 1 element.
   if (high - low == 1) {
@@ -142,31 +139,31 @@ void my_sort_partial(unsigned int low, unsigned int high, data_t *data) {
   }
   unsigned mid = (high + low) / 2;
 
-#pragma omp task
-  {
-    my_sort_partial(low, mid, data);
-  }
-#pragma omp task
-  {
-    my_sort_partial(mid, high, data);
-  }
-#pragma omp taskwait
+  my_sort_partial(low, mid, data, scratch);
+  my_sort_partial(mid, high, data, scratch);
 
-  my_merge_serial(low, mid, high, data);
+  my_merge_parallel(low, mid, mid, high, data, low, high, scratch);
+
+  std::memcpy(data+low, scratch+low, (high-low) * sizeof(data_t));
 }
 
 void psort(int n, data_t *data) {
     // FIXME: Implement a more efficient parallel sorting algorithm for the CPU,
     // using the basic idea of merge sort.
     // std::sort(data, data + n);
+  data_t *scratch = (data_t *)malloc(n * sizeof(data_t));
+
   if (n > 0) {
     //std::cout << "PSORT " << n << "\n";
-#pragma omp parallel
-#pragma omp single
-    {
-      my_sort_partial(0, n, data);
-    }
-#pragma omp taskwait
+    //#pragma omp parallel
+    //#pragma omp single
+    //{
+      my_sort_partial(0, n, data, scratch);
+      //}
+    //#pragma omp taskwait
+    //std::memcpy(data, scratch, n * sizeof(data_t));
+
 
   }
+  free(scratch);
 }

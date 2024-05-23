@@ -8,6 +8,14 @@
 
 typedef unsigned long long data_t;
 
+void print_l(int n, data_t *data) {
+  std::cout << "\n";
+  for (int i = 0; i < n; i++) {
+    std::cout << data[i] << " ";
+  }
+  std::cout << "\n";
+}
+
 
 void my_merge_serial(int start,int mid, int end, data_t *data) {
 
@@ -120,8 +128,20 @@ void my_merge_parallel(
   my_merge_parallel(large_mid+1, e3, found, e4, data, mid_scratch + 1, scratch_end, scratch);
 
   // Final copy back to the main memory
-  std::memcpy(data + s1, scratch + scratch_start, (scratch_end-scratch_start) * sizeof(data_t));
+  // std::cout << "Before Main Mem  -   ";
+  // print_l(5, data);
 
+  // std::cout << "Before Scratch Mem - ";
+  // print_l(5, scratch);
+
+
+  // std::memcpy(data + s1, scratch + scratch_start, (scratch_end-scratch_start) * sizeof(data_t));
+
+  // std::cout << "After Main Mem  -   ";
+  // print_l(5, data);
+
+  // std::cout << "After Scratch Mem - ";
+  // print_l(5, scratch);
 
 }
 
@@ -147,6 +167,8 @@ void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
   my_sort_partial(mid, high, data, scratch);
 
   my_merge_parallel(low, mid, mid, high, data, low, high, scratch);
+  std::memcpy(data+low, scratch+low, (high-low) * sizeof(data_t));
+
 
 }
 
@@ -154,17 +176,10 @@ void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
 /////////////////////////////////////////////////////////////////////////////////////////
 
 
-void print_l(int n, data_t *data) {
-  std::cout << "\n";
-  for (int i = 0; i < n; i++) {
-    std::cout << data[i] << " ";
-  }
-  std::cout << "\n";
-}
 
 int main() {
 
-  const int count = 12;
+  const int count = 8;
   data_t *data = (data_t *)malloc(count * sizeof(data_t));
   data_t *scratch = (data_t *)malloc(count * sizeof(data_t));
 
@@ -175,15 +190,21 @@ int main() {
     data[i] = (data_t)dist(gen);
   }
   unsigned long before, after;
-  // data[0] = 3;
-  // data[1] = 5;
-  // data[2] = 1;
-  //data[3] = 4;
+   data[0] = 8;
+   data[1] = 4;
+   data[2] = 6;
+   data[3] = 5;
+   data[4] = 2;
+   data[5] = 3;
+   data[6] = 1;
+   data[7] = 7;
   print_l(count, data);
 
   before = __rdtsc();
   my_sort_partial(0, count, data, scratch);
   after = __rdtsc();
+
+  //std::memcpy(data, scratch, count * sizeof(data_t));
 
   print_l(count, data);
 
