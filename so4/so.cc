@@ -43,7 +43,7 @@ void my_merge_serial(unsigned int start,unsigned int mid, unsigned int end, data
   free(temp);
 }
 
-int bs_rightmost(int start, int end, data_t value, data_t *data) {
+int bs_leftmost(int start, int end, data_t value, data_t *data) {
   while (start < end) {
     int mid = (end + start) / 2;
 
@@ -69,14 +69,8 @@ void my_merge_parallel(
                        data_t *scratch
                        ) {
 
-  //std::cout << "MERGE " << s1 << " " << e1 << " " << s2 << " " << e2 << " " << scratch_start << " " << scratch_end << "\n";
   int d1 = e1 - s1;
   int d2 = e2 - s2;
-  //std::cout << "BASE CASE " << d1 << " " << d2 << "\n";
-
-  //if (d1 <= 0 || d2 <= 0) {
-  //  return;
-  //}
 
   unsigned s3, e3;           // Index bounds for the larger list from the two.
   unsigned s4, e4;           // Index bounds for the smaller list from the two.
@@ -96,6 +90,7 @@ void my_merge_parallel(
     e4 = e2;
     large_mid = (e1 + s1) / 2;
   }
+  // If largest array's len is zero or less, we return cause that is our basecase.
   if ((e3 - s3) <= 0) {
     return;
   }
@@ -103,7 +98,7 @@ void my_merge_parallel(
 
   // mid_l is an index value
   // Binary search on the smaller list.
-  unsigned found = bs_rightmost(s4, e4, m_value, data);
+  unsigned found = bs_leftmost(s4, e4, m_value, data);
 
   // mid point of scratch would be first half elements of largest array
   // + first half element of smaller array)
@@ -116,19 +111,16 @@ void my_merge_parallel(
   // Setup the recursion
   my_merge_parallel(s3, large_mid, s4, found, data, scratch_start, mid_scratch, scratch);
   my_merge_parallel(large_mid+1, e3, found, e4, data, mid_scratch + 1, scratch_end, scratch);
-
-  // Final copy back to the main memory
-  //std::memcpy(data + s3, scratch + scratch_start, (scratch_end-scratch_start) * sizeof(data_t));
-
 }
 
 void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
-  //std::cout << "SORT " << low << " " << high << "\n";
+
   // If data range contains only 1 element.
   if (high - low == 1) {
     return;
   }
   // If data range contains only 2 elements.
+  // Swap'em if they are out of order.
   if (high - low == 2) {
     if (data[high-1] < data[low]) {
       data[high-1]   = data[low]    ^ data[high-1];
@@ -144,6 +136,7 @@ void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
 
   my_merge_parallel(low, mid, mid, high, data, low, high, scratch);
 
+  // Copy back scratch buffer to main memory.
   std::memcpy(data+low, scratch+low, (high-low) * sizeof(data_t));
 }
 
