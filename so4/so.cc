@@ -124,15 +124,13 @@ void my_merge_parallel(
   scratch[mid_scratch] = m_value;
 
   // Setup the recursion
-// #pragma omp parallel
-//   {
-// #pragma omp task
+#pragma omp task
     my_merge_parallel(s3, large_mid, s4, found, data, scratch_start, mid_scratch, scratch);
-// #pragma omp task
+#pragma omp task
     my_merge_parallel(large_mid+1, e3, found, e4, data, mid_scratch + 1, scratch_end, scratch);
-//   }
-  return;
 
+#pragma omp taskwait
+  return;
 }
 
 void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
@@ -153,21 +151,18 @@ void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
   }
   unsigned mid = (high + low) / 2;
 
-// #pragma omp parallel
-//   {
-// #pragma omp task
+#pragma omp task
   my_sort_partial(low, mid, data, scratch);
 
-
-  //#pragma omp task
+#pragma omp task
   my_sort_partial(mid, high, data, scratch);
-  //  }
+
+#pragma omp taskwait
 
   my_merge_parallel(low, mid, mid, high, data, low, high, scratch);
 
   // Copy back scratch buffer to main memory.
   std::memcpy(data+low, scratch+low, (high-low) * sizeof(data_t));
-
 
 }
 
@@ -178,12 +173,12 @@ void psort(int n, data_t *data) {
   data_t *scratch = (data_t *)malloc(n * sizeof(data_t));
 
   if (n > 0) {
-    // #pragma omp parallel
-    // #pragma omp single
-    // {
+    #pragma omp parallel
+    #pragma omp single
+    {
       my_sort_partial(0, n, data, scratch);
-    // }
-    // #pragma omp taskwait
+    }
+    #pragma omp taskwait
   }
   free(scratch);
 }
