@@ -86,7 +86,7 @@ void my_merge_parallel(
   int d1 = e1 - s1;
   int d2 = e2 - s2;
 
-  if (d1 < 128 || d2 < 128) {
+  if (d1 < 8 || d2 < 8) {
     my_merge_serial(s1, e1, s2, e2, data, scratch_start, scratch_end, scratch);
     return;
   }
@@ -165,11 +165,11 @@ void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
 
   #pragma omp taskwait
 
-  #pragma omp parallel
-  #pragma omp single
-  {
+  // #pragma omp parallel
+  // #pragma omp single
+  // {
   my_merge_parallel(low, mid, mid, high, data, low, high, scratch);
-   }
+  //   }
   //  Copy back scratch buffer to main memory.
 
 

@@ -166,16 +166,22 @@ void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
   }
   unsigned mid = (high + low) / 2;
 
-  #pragma omp task
+#pragma omp task shared(data, scratch)
   my_sort_partial(low, mid, data, scratch);
 
-  #pragma omp task
+#pragma omp task shared(data, scratch)
   my_sort_partial(mid, high, data, scratch);
 
   #pragma omp taskwait
-  my_merge_serial(low, mid, mid, high, data, low, high, scratch);
 
-  // Copy back scratch buffer to main memory.
+  #pragma omp parallel
+  #pragma omp single
+  {
+  my_merge_parallel(low, mid, mid, high, data, low, high, scratch);
+   }
+  //  Copy back scratch buffer to main memory.
+
+
   std::memcpy(data+low, scratch+low, (high-low) * sizeof(data_t));
 
 }
@@ -183,6 +189,7 @@ void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
 void psort(int n, data_t *data) {
   data_t *scratch = (data_t *)malloc(n * sizeof(data_t));
 
+  //omp_set_max_active_levels(4);
   #pragma omp parallel
   #pragma omp single
   {
