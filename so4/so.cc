@@ -86,7 +86,7 @@ void my_merge_parallel(
   int d1 = e1 - s1;
   int d2 = e2 - s2;
 
-  if (d1 < 2 || d2 < 2) {
+  if (d1 < 128 || d2 < 128) {
     my_merge_serial(s1, e1, s2, e2, data, scratch_start, scratch_end, scratch);
     return;
   }
@@ -127,12 +127,13 @@ void my_merge_parallel(
   // Set the min value of the scratch buffer
   scratch[mid_scratch] = m_value;
 
-  // Setup the recursion
-#pragma omp task
-    my_merge_parallel(s3, large_mid, s4, found, data, scratch_start, mid_scratch, scratch);
-#pragma omp task
-    my_merge_parallel(large_mid+1, e3, found, e4, data, mid_scratch + 1, scratch_end, scratch);
-#pragma omp taskwait
+  #pragma omp task
+  my_merge_parallel(s3, large_mid, s4, found, data, scratch_start, mid_scratch, scratch);
+
+  #pragma omp task
+  my_merge_parallel(large_mid+1, e3, found, e4, data, mid_scratch + 1, scratch_end, scratch);
+
+  #pragma omp taskwait
   return;
 }
 
@@ -156,34 +157,36 @@ void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
   }
   unsigned mid = (high + low) / 2;
 
-
-#pragma omp task
+#pragma omp task shared(data, scratch)
   my_sort_partial(low, mid, data, scratch);
 
-#pragma omp task
+#pragma omp task shared(data, scratch)
   my_sort_partial(mid, high, data, scratch);
 
-#pragma omp taskwait
-  my_merge_parallel(low, mid, mid, high, data, low, high, scratch);
+  #pragma omp taskwait
 
-  // Copy back scratch buffer to main memory.
+  #pragma omp parallel
+  #pragma omp single
+  {
+  my_merge_parallel(low, mid, mid, high, data, low, high, scratch);
+   }
+  //  Copy back scratch buffer to main memory.
+
+
   std::memcpy(data+low, scratch+low, (high-low) * sizeof(data_t));
 
 }
 
 void psort(int n, data_t *data) {
-    // FIXME: Implement a more efficient parallel sorting algorithm for the CPU,
-    // using the basic idea of merge sort.
-    // std::sort(data, data + n);
   data_t *scratch = (data_t *)malloc(n * sizeof(data_t));
 
-  if (n > 0) {
-    #pragma omp parallel
-    #pragma omp single
-    {
+  //omp_set_max_active_levels(4);
+  #pragma omp parallel
+  #pragma omp single
+  {
+    if (n > 0) {
       my_sort_partial(0, n, data, scratch);
     }
-    #pragma omp taskwait
-  }
   free(scratch);
+  }
 }
