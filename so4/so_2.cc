@@ -242,16 +242,16 @@ int main() {
 
   std::cout << "Cycles for sorting - " << after - before << "\n";
 
-  // before = __rdtsc();
-  // int test_code = test_monotonicity(count, data);
-  // after = __rdtsc();
+  before = __rdtsc();
+  int test_code = test_monotonicity(count, data);
+  after = __rdtsc();
 
-  // std::cout << "Cycles for testing - " << after - before << "\n";
+  std::cout << "Cycles for testing - " << after - before << "\n";
 
-  // free(data);
+  free(data);
 
-  // if (test_code == 0)
-  //   std::cout << "Success\n";
-  // else
-  //   std::cout << "Failure\n";
+  if (test_code == 0)
+    std::cout << "Success\n";
+  else
+    std::cout << "Failure\n";
 }
