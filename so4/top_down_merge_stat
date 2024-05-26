@@ -1,0 +1,27 @@
+Cycles for sorting - 37053996065
+Cycles for testing - 474904378
+Success
+
+ Performance counter stats for './bin/so_par_exp':
+
+         15,538.52 msec task-clock                       #    1.000 CPUs utilized             
+                81      context-switches                 #    5.213 /sec                      
+                 8      cpu-migrations                   #    0.515 /sec                      
+          3,90,754      page-faults                      #   25.147 K/sec                     
+   67,93,82,56,828      cycles                           #    4.372 GHz                         (81.79%)
+ 1,23,08,97,18,190      instructions                     #    1.81  insn per cycle              (90.90%)
+   13,28,81,60,229      branches                         #  855.175 M/sec                       (90.91%)
+      83,17,22,277      branch-misses                    #    6.26% of all branches             (81.83%)
+                        TopdownL1                 #      9.9 %  tma_backend_bound      
+                                                  #     72.8 %  tma_bad_speculation    
+                                                  #      1.0 %  tma_frontend_bound     
+                                                  #     16.3 %  tma_retiring             (90.91%)
+   57,06,19,74,201      L1-dcache-loads                  #    3.672 G/sec                       (90.91%)
+      73,12,15,385      L1-dcache-load-misses            #    1.28% of all L1-dcache accesses   (90.91%)
+         90,21,757      LLC-loads                        #  580.606 K/sec                       (90.91%)
+         61,90,748      LLC-load-misses                  #   68.62% of all L1-icache accesses   (90.90%)
+
+      15.540574281 seconds time elapsed
+
+      15.175345000 seconds user
+       0.363984000 seconds sys

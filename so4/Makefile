@@ -10,3 +10,6 @@ so_baseline:
 so_parallel_sort:
 	mkdir -p bin/ && g++ -fopenmp -g -O0 -march=native -std=c++17 -o bin/so_parallel_sort so_parallel_sort.cc
 
+so_par_exp:
+	mkdir -p bin/ && g++ -fopenmp -g -O0 -march=native -std=c++17 -o bin/so_par_exp so_par_exp.cc
+
