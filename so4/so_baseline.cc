@@ -200,7 +200,7 @@ int test_monotonicity(int count, data_t *data) {
 
 int main() {
 
-  const int count = 10000000;
+  const int count = 100000000;
   data_t *data = (data_t *)malloc(count * sizeof(data_t));
 
   std::random_device seed;
