@@ -83,7 +83,7 @@ void psort(int n, data_t *data) {
     int end;
   };
 
-  int procs = omp_get_num_procs();
+  int procs = 4;//omp_get_num_procs();
   struct base_range *base_ranges = (struct base_range*)malloc(procs * sizeof(struct base_range));
 
   int len = n / procs;
