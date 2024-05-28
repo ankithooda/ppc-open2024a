@@ -78,13 +78,13 @@ void bottom_up_merge_sort(int start, int end, data_t *data, data_t *scratch) {
 
 void psort(int n, data_t *data) {
   data_t *scratch = (data_t *)malloc(n * sizeof(data_t));
-  struct range {
+  struct base_range {
     int start;
     int end;
   };
 
   int procs = omp_get_num_procs();
-  struct range *base_ranges = (struct range*)malloc(procs * sizeof(struct range));
+  struct base_range *base_ranges = (struct base_range*)malloc(procs * sizeof(struct base_range));
 
   int len = n / procs;
 
@@ -104,9 +104,6 @@ void psort(int n, data_t *data) {
 
       bottom_up_merge_sort(range_start, range_end, data, scratch);
     }
-
-    int partition_stride = 2; // How many partitions to be form a single run
-
 
     int partition_count = 1;
     int total_partitions = procs;
