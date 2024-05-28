@@ -218,45 +218,49 @@ void psort(int n, data_t *data) {
     std::cout << "DATA After merges ";
     print_l(n, data);
 
-    std::cout << "All Merging done \n";
+    std::cout << "--------------------  All Merging done ------------------------\n";
 
     int partition_stride = 2; // How many partitions to be form a single run
 
     // 8 partitions require 3 merges
 
-    while(partition_stride <= procs) {
-      // Now merge pairwise proc partitions
-      std::cout << "MERGE PROC PARTITIONS " << partition_stride << "\n";
-
-      for (int p = 0; p < procs; p=p+partition_stride) {
-        bottom_up_merge(
-                        base_ranges[p].start,
-                        base_ranges[p].end,
-                        base_ranges[p + partition_stride - 1].start,
-                        base_ranges[p + partition_stride - 1].end,
-                        data,
-                        base_ranges[p].start,
-                        base_ranges[p + partition_stride - 1].end,
-                        scratch
-                        );
-      }
-      std::cout << "DATA ";
-      print_l(n, data);
-
-      std::cout << "SCRATCH";
-      print_l(n, scratch);
-
-      std::memcpy(data, scratch, (n * sizeof(data_t)));
-
-      std::cout << "DATA ";
-      print_l(n, data);
-
-      std::cout << "SCRATCH";
-      print_l(n, scratch);
-
-      partition_stride = partition_stride * 2;
+    for (int proc = 0; proc < procs; proc++) {
+      std::cout << "base Range " << proc << " " << base_ranges[proc].start << " " << base_ranges[proc].end << "\n";
     }
+
   free(scratch);
+  }
+
+  int partition_count = 1;
+  int total_partitions = procs;
+
+  while (partition_count < total_partitions) {
+    // We process two set of partitions at a time.
+    // Each partition set contains partition_cout partitions.
+
+    for (int i = 0; i < total_partitions; i = i + partition_count) {
+      bottom_up_merge(
+                      base_ranges[i].start,
+                      base_ranges[i + partition_count - 1].end,
+                      base_ranges[i + partition_count].start,
+                      base_ranges[i + (partition_count * 2) - 1].end,
+                      data,
+                      base_ranges[i].start,
+                      base_ranges[i + (partition_count * 2) - 1].end,
+                      scratch
+                      );
+      std::cout << "value of " << i << "\n";
+    }
+
+    // Once all merges are done, copy back scratch buffer.
+    std::memcpy(data, scratch, (n * sizeof(data_t)));
+
+    print_l(n, scratch);
+    print_l(n, data);
+
+    partition_count = partition_count * 2;
+
+    std::cout << "---------------------------------------------------- \n" ;
   }
 
 }
