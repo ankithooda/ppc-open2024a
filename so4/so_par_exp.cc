@@ -108,7 +108,7 @@ void bottom_up_merge(
                      data_t *scratch
                      ) {
 
-  std::cout << "MERGE " << run1_start << " " << run1_end << " " << run2_start << " " << run2_end << " " << scratch_start << " " << scratch_end << "\n";
+  // std::cout << "MERGE " << run1_start << " " << run1_end << " " << run2_start << " " << run2_end << " " << scratch_start << " " << scratch_end << "\n";
 
   int scratch_index = scratch_start;
 
@@ -149,13 +149,13 @@ void bottom_up_merge(
 
 void bottom_up_merge_sort(int start, int end, data_t *data, data_t *scratch) {
 
-  std::cout << start << " " << end << "\n";
+  // std::cout << start << " " << end << "\n";
 
   int n = end - start;
 
   // 1 interation for each width.
   for (int width = 1; width < n; width = 2 * width) {
-    std::cout << "All runs for width " << width << "\n";
+    // std::cout << "All runs for width " << width << "\n";
 
     // Two runs of size width are processed at a time.
     for (int i = start; i < end; i = i + 2 * width) {
@@ -165,14 +165,14 @@ void bottom_up_merge_sort(int start, int end, data_t *data, data_t *scratch) {
       int run2_start = run1_end;
       int run2_end = std::min(run2_start + width, end);
 
-      std::cout << "RUN " << run1_start << " " << run1_end << " " << run2_start << " " << run2_end << "\n";
+      // std::cout << "RUN " << run1_start << " " << run1_end << " " << run2_start << " " << run2_end << "\n";
 
       bottom_up_merge(run1_start, run1_end, run2_start, run2_end, data, run1_start, run2_end, scratch);
 
     }
 
-    std::cout << "SCRATCH ";
-    print_l(end-start, scratch+start);
+    // std::cout << "SCRATCH ";
+    // print_l(end-start, scratch+start);
 
     // Once one iteration of fixed width is done copy scratch back to data.
     std::memcpy(data + start, scratch + start, (n * sizeof(data_t)));
@@ -194,6 +194,7 @@ void psort(int n, data_t *data) {
   int len = n / procs;
 
   if (n > 0) {
+    #pragma omp parallel for
     for (int p = 0; p < procs; p++) {
 
       int range_start = p * len;
@@ -207,7 +208,7 @@ void psort(int n, data_t *data) {
       base_ranges[p].end = range_end;
 
 
-      std::cout << "ITERATION for partition " << range_start << " " << range_end << "\n";
+      // std::cout << "ITERATION for partition " << range_start << " " << range_end << "\n";
 
       bottom_up_merge_sort(range_start, range_end, data, scratch);
 
@@ -215,20 +216,20 @@ void psort(int n, data_t *data) {
 
     }
 
-    std::cout << "DATA After merges ";
-    print_l(n, data);
+    // std::cout << "DATA After merges ";
+    // print_l(n, data);
 
-    std::cout << "--------------------  All Merging done ------------------------\n";
+    // std::cout << "--------------------  All Merging done ------------------------\n";
 
     int partition_stride = 2; // How many partitions to be form a single run
 
     // 8 partitions require 3 merges
 
-    for (int proc = 0; proc < procs; proc++) {
-      std::cout << "base Range " << proc << " " << base_ranges[proc].start << " " << base_ranges[proc].end << "\n";
-    }
+    // for (int proc = 0; proc < procs; proc++) {
+    //   std::cout << "base Range " << proc << " " << base_ranges[proc].start << " " << base_ranges[proc].end << "\n";
+    // }
 
-  free(scratch);
+    //free(scratch);
   }
 
   int partition_count = 1;
@@ -238,7 +239,8 @@ void psort(int n, data_t *data) {
     // We process two set of partitions at a time.
     // Each partition set contains partition_cout partitions.
 
-    for (int i = 0; i < total_partitions; i = i + partition_count) {
+    int i = 0;
+    while (i < total_partitions) {
       bottom_up_merge(
                       base_ranges[i].start,
                       base_ranges[i + partition_count - 1].end,
@@ -249,19 +251,21 @@ void psort(int n, data_t *data) {
                       base_ranges[i + (partition_count * 2) - 1].end,
                       scratch
                       );
-      std::cout << "value of " << i << "\n";
+
+      i = i + (partition_count * 2);
     }
 
     // Once all merges are done, copy back scratch buffer.
     std::memcpy(data, scratch, (n * sizeof(data_t)));
 
-    print_l(n, scratch);
-    print_l(n, data);
+    // print_l(n, scratch);
+    // print_l(n, data);
 
     partition_count = partition_count * 2;
 
-    std::cout << "---------------------------------------------------- \n" ;
+    // std::cout << "---------------------------------------------------- \n" ;
   }
+  free(scratch);
 
 }
 
@@ -283,7 +287,7 @@ int test_monotonicity(int count, data_t *data) {
 
 int main() {
 
-  const int count = 19;
+  const int count = 10000000;
   data_t *data = (data_t *)malloc(count * sizeof(data_t));
 
   std::random_device seed;
@@ -303,13 +307,13 @@ int main() {
   // data[7] = 7;
   // data[8] = 0;
   // data[9] = 6;
-  print_l(count, data);
+  // print_l(count, data);
 
   before = __rdtsc();
   psort(count, data);
   after = __rdtsc();
 
-  print_l(count, data);
+  // print_l(count, data);
 
   std::cout << "Cycles for sorting - " << after - before << "\n";
 
