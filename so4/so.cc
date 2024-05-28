@@ -7,186 +7,136 @@
 
 typedef unsigned long long data_t;
 
-void my_merge_serial(
-                     int s1,
-                     int e1,
-                     int s2,
-                     int e2,
+void bottom_up_merge(
+                     int run1_start,
+                     int run1_end,
+                     int run2_start,
+                     int run2_end,
                      data_t *data,
                      int scratch_start,
                      int scratch_end,
                      data_t *scratch
                      ) {
 
-  // #pragma omp critical
-  // std::cout << "SER MERGE " << s1 << " " << e1 << " | " << s2 << " " << e2 << " | " << scratch_start << " " << scratch_end << "\n";
-  //data_t *temp = (data_t *)malloc((end - start) * sizeof(data_t));
-  data_t *temp = scratch + scratch_start;
-  int i1 = s1;
-  int i2 = s2;
-  int t = 0;
+  int scratch_index = scratch_start;
+  int run1_index = run1_start;
+  int run2_index = run2_start;
 
-  while(i1 < e1 && i2 < e2 ) {
-    if (data[i1] < data[i2]) {
-      temp[t] = data[i1];
-      i1++;
+  // Merge the common run length.
+  while (run1_index < run1_end && run2_index < run2_end) {
+
+    if (data[run1_index] < data[run2_index]) {
+      scratch[scratch_index] = data[run1_index];
+      run1_index++;
     } else {
-      temp[t] = data[i2];
-      i2++;
+      scratch[scratch_index] = data[run2_index];
+      run2_index++;
     }
-    t++;
+    scratch_index++;
   }
 
-  while (i1 < e1) {
-    temp[t] = data[i1];
-    i1++;
-    t++;
+  // Copy the rest of the elements from whichever run is left.
+  while (run1_index < run1_end) {
+
+    scratch[scratch_index] = data[run1_index];
+
+    scratch_index++;
+    run1_index++;
   }
 
-  while (i2 < e2) {
-    temp[t] = data[i2];
-    i2++;
-    t++;
+  while (run2_index < run2_end) {
+
+    scratch[scratch_index] = data[run2_index];
+
+    scratch_index++;
+    run2_index++;
   }
-
-  // Final copy back to the main memory
-  //std::memcpy(data + start, temp, (end-start) * sizeof(data_t));
-
-  //free(temp);
 }
 
-int bs_leftmost(int start, int end, data_t value, data_t *data) {
-  while (start < end) {
-    int mid = (end + start) / 2;
+void bottom_up_merge_sort(int start, int end, data_t *data, data_t *scratch) {
 
-    if (data[mid] < value) {
-      start = mid + 1;
-    } else {
-      end = mid;
+  int n = end - start;
+
+  // 1 interation for each width.
+  for (int width = 1; width < n; width = 2 * width) {
+
+    // Two runs of size width are processed at a time.
+    for (int i = start; i < end; i = i + 2 * width) {
+      int run1_start = i;
+      int run1_end = std::min(run1_start + width, end);
+
+      int run2_start = run1_end;
+      int run2_end = std::min(run2_start + width, end);
+
+      bottom_up_merge(run1_start, run1_end, run2_start, run2_end, data, run1_start, run2_end, scratch);
     }
+
+    // Once one iteration of fixed width is done copy scratch back to data.
+    std::memcpy(data + start, scratch + start, (n * sizeof(data_t)));
   }
-  return start;
-}
-
-// s1 <= e1 <= s2 <= e2                     (All indices on data)
-// scratch_start <= scratch_end             (All indices on scratch)
-void my_merge_parallel(
-                       int s1,
-                       int e1,
-                       int s2,
-                       int e2,
-                       data_t *data,
-                       int scratch_start,
-                       int scratch_end,
-                       data_t *scratch
-                       ) {
-
-  // #pragma omp critical
-  // std::cout << "PAR MERGE " << s1 << " " << e1 << " | " << s2 << " " << e2 << " | " << scratch_start << " " << scratch_end << "\n";
-  int d1 = e1 - s1;
-  int d2 = e2 - s2;
-
-  if (d1 < 8 || d2 < 8) {
-    my_merge_serial(s1, e1, s2, e2, data, scratch_start, scratch_end, scratch);
-    return;
-  }
-
-  unsigned s3, e3;           // Index bounds for the larger list from the two.
-  unsigned s4, e4;           // Index bounds for the smaller list from the two.
-
-  unsigned large_mid;
-  data_t m_value;
-  if (d1 < d2) {
-    s3 = s2;
-    e3 = e2;
-    s4 = s1;
-    e4 = e1;
-    large_mid = (e2 + s2) / 2;
-  } else {
-    s3 = s1;
-    e3 = e1;
-    s4 = s2;
-    e4 = e2;
-    large_mid = (e1 + s1) / 2;
-  }
-  // If largest array's len is zero or less, we return cause that is our basecase.
-  if ((e3 - s3) <= 0) {
-    return;
-  }
-  m_value = data[large_mid];
-
-  // mid_l is an index value
-  // Binary search on the smaller list.
-  unsigned found = bs_leftmost(s4, e4, m_value, data);
-
-  // mid point of scratch would be first half elements of largest array
-  // + first half element of smaller array)
-
-  unsigned mid_scratch = scratch_start + (large_mid - s3) + (found - s4);
-
-  // Set the min value of the scratch buffer
-  scratch[mid_scratch] = m_value;
-
-  #pragma omp task
-  my_merge_parallel(s3, large_mid, s4, found, data, scratch_start, mid_scratch, scratch);
-
-  #pragma omp task
-  my_merge_parallel(large_mid+1, e3, found, e4, data, mid_scratch + 1, scratch_end, scratch);
-
-  #pragma omp taskwait
-  return;
-}
-
-void my_sort_partial(int low, int high, data_t *data, data_t *scratch) {
-  // #pragma omp critical
-  // std::cout << "SORT " << low << " " << high << "\n";
-
-  // If data range contains only 1 element.
-  if (high - low == 1) {
-    return;
-  }
-  // If data range contains only 2 elements.
-  // Swap'em if they are out of order.
-  if (high - low == 2) {
-    if (data[high-1] < data[low]) {
-      data[high-1]   = data[low]    ^ data[high-1];
-      data[low]      = data[high-1] ^ data[low];
-      data[high-1]   = data[low]    ^ data[high-1];
-    }
-    return;
-  }
-  unsigned mid = (high + low) / 2;
-
-#pragma omp task shared(data, scratch)
-  my_sort_partial(low, mid, data, scratch);
-
-#pragma omp task shared(data, scratch)
-  my_sort_partial(mid, high, data, scratch);
-
-  #pragma omp taskwait
-
-  // #pragma omp parallel
-  // #pragma omp single
-  // {
-  my_merge_parallel(low, mid, mid, high, data, low, high, scratch);
-  //   }
-  //  Copy back scratch buffer to main memory.
-
-
-  std::memcpy(data+low, scratch+low, (high-low) * sizeof(data_t));
-
 }
 
 void psort(int n, data_t *data) {
   data_t *scratch = (data_t *)malloc(n * sizeof(data_t));
+  struct range {
+    int start;
+    int end;
+  };
 
-  //omp_set_max_active_levels(4);
-  #pragma omp parallel
-  #pragma omp single
-  {
-    if (n > 0) {
-      my_sort_partial(0, n, data, scratch);
+  int procs = omp_get_num_procs();
+  struct range *base_ranges = (struct range*)malloc(procs * sizeof(struct range));
+
+  int len = n / procs;
+
+  if (n > 0) {
+#pragma omp parallel for
+    for (int p = 0; p < procs; p++) {
+
+      int range_start = p * len;
+      int range_end = (p + 1) * len;
+
+      if ((p + 1) >= procs) {
+        range_end = n;
+      }
+
+      base_ranges[p].start = range_start;
+      base_ranges[p].end = range_end;
+
+      bottom_up_merge_sort(range_start, range_end, data, scratch);
     }
-  free(scratch);
+
+    int partition_stride = 2; // How many partitions to be form a single run
+
+
+    int partition_count = 1;
+    int total_partitions = procs;
+
+    while (partition_count < total_partitions) {
+      // We process two set of partitions at a time.
+      // Each partition set contains partition_cout partitions.
+
+      int i = 0;
+      while (i < total_partitions) {
+        bottom_up_merge(
+                        base_ranges[i].start,
+                        base_ranges[i + partition_count - 1].end,
+                        base_ranges[i + partition_count].start,
+                        base_ranges[i + (partition_count * 2) - 1].end,
+                        data,
+                        base_ranges[i].start,
+                        base_ranges[i + (partition_count * 2) - 1].end,
+                        scratch
+                        );
+
+        i = i + (partition_count * 2);
+      }
+
+      // Once all merges are done, copy back scratch buffer.
+      std::memcpy(data, scratch, (n * sizeof(data_t)));
+
+      partition_count = partition_count * 2;
+    }
   }
+  free(scratch);
+  free(base_ranges);
 }
