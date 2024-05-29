@@ -139,23 +139,15 @@ void bottom_up_merge(
     scratch_index++;
     run2_index++;
   }
-
 }
 
 void bottom_up_merge_sort(int start, int end, data_t *data, data_t *scratch) {
-
-  // std::cout << start << " " << end << "\n";
-
-  // std::cout << data << " ORIG DATA ";
-  // print_l(end-start, data+start);
-
 
   int n = end - start;
   int swap_count = 0;
 
   // 1 interation for each width.
   for (int width = 1; width < n; width = 2 * width) {
-    // std::cout << "All runs for width " << width << "\n";
 
     // Two runs of size width are processed at a time.
     for (int i = start; i < end; i = i + 2 * width) {
@@ -165,42 +157,16 @@ void bottom_up_merge_sort(int start, int end, data_t *data, data_t *scratch) {
       int run2_start = run1_end;
       int run2_end = std::min(run2_start + width, end);
 
-      // std::cout << "RUN " << run1_start << " " << run1_end << " " << run2_start << " " << run2_end << "\n";
-
       bottom_up_merge(run1_start, run1_end, run2_start, run2_end, data, run1_start, run2_end, scratch);
-
     }
-
-    // std::cout << scratch << " SCRATCH ";
-    // print_l(end-start, scratch+start);
-
-    // std::cout << data << " DATA ";
-    // print_l(end-start, data+start);
-
-    // std::cout << "Before Swapping " << "\n";
-
-    // Once one iteration of fixed width is done copy scratch back to data.
-    //std::memcpy(data + start, scratch + start, (n * sizeof(data_t)));
-
 
     // Swap data and scratch
 
     data_t *temp;
-
     temp     = data;
     data     = scratch;
     scratch  = temp;
-
     swap_count++;
-
-    // std::cout << scratch << " SCRATCH should contain prev data value ";
-    // print_l(end-start, scratch+start);
-
-    // std::cout << data << " DATA shoudl contain prev scratch value ";
-    // print_l(end-start, data+start);
-
-    // std::cout << "Above is iter for ------------------------------------ " << width << " " << swap_count <<"\n";
-
   }
 
   // TODO : The logic below is too complex, simplify it.
@@ -210,13 +176,6 @@ void bottom_up_merge_sort(int start, int end, data_t *data, data_t *scratch) {
   // So we copy from data pointer to scratch pointer
   if ((swap_count % 2) == 1) {
     std::memcpy(scratch + start, data + start, (n * sizeof(data_t)));
-
-    // std::cout << scratch << " SCRATCH After Copying ";
-    // print_l(end-start, scratch+start);
-
-    // std::cout << data << " DATA After Copying  ";
-    // print_l(end-start, data+start);
-
   }
 }
 
@@ -248,13 +207,7 @@ void psort(int n, data_t *data) {
       base_ranges[p].start = range_start;
       base_ranges[p].end = range_end;
 
-
-      // std::cout << "ITERATION for partition " << range_start << " " << range_end << "\n";
-
       bottom_up_merge_sort(range_start, range_end, data, scratch);
-
-      //print_l(n, scratch);
-
     }
   }
 
@@ -267,8 +220,10 @@ void psort(int n, data_t *data) {
     // We process two set of partitions at a time.
     // Each partition set contains partition_count partitions.
 
-    int i = 0;
-    while (i < total_partitions) {
+    // int i = 0;
+    #pragma omp parallel for
+    for (int i = 0; i < total_partitions; i = i + (partition_count * 2)) {
+    // while (i < total_partitions) {
       bottom_up_merge(
                       base_ranges[i].start,
                       base_ranges[i + partition_count - 1].end,
@@ -280,7 +235,8 @@ void psort(int n, data_t *data) {
                       scratch
                       );
 
-      i = i + (partition_count * 2);
+    //   i = i + (partition_count * 2);
+    // }
     }
 
     // print_l(n, scratch);
@@ -299,15 +255,13 @@ void psort(int n, data_t *data) {
 
     // Once all merges are done, copy back scratch buffer.
     // std::memcpy(data, scratch, (n * sizeof(data_t)));
-
-
-    // std::cout << "---------------------------------------------------- \n" ;
   }
   // TODO : The logic below is too complex, simplify it.
   // After odd number of swaps scratch pointer is the original data pointer
   // and data pointer is the original scratch pointer.
   // But data pointer has the sorted data.
-  // So we copy from data pointer to scratch pointer
+  // So we swap first
+  // Copy scratch to data and free scratch afterword (avoids unnecessary branch).
   if ((swap_count % 2) == 1) {
     // Swap back
     data_t *temp;
@@ -316,17 +270,10 @@ void psort(int n, data_t *data) {
     scratch  = temp;
 
     std::memcpy(data, scratch, (n * sizeof(data_t)));
-
-    // std::cout << scratch << " SCRATCH After Copying ";
-    // print_l(end-start, scratch+start);
-
-    // std::cout << data << " DATA After Copying  ";
-    // print_l(end-start, data+start);
-
   }
 
   free(scratch);
-
+  free(base_ranges);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
