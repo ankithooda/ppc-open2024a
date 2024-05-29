@@ -27,9 +27,6 @@ void my_merge_serial(
                      data_t *scratch
                      ) {
 
-  // #pragma omp critical
-  // std::cout << "SER MERGE " << s1 << " " << e1 << " | " << s2 << " " << e2 << " | " << scratch_start << " " << scratch_end << "\n";
-  //data_t *temp = (data_t *)malloc((end - start) * sizeof(data_t));
   data_t *temp = scratch + scratch_start;
   int i1 = s1;
   int i2 = s2;
@@ -108,8 +105,6 @@ void bottom_up_merge(
                      data_t *scratch
                      ) {
 
-  // std::cout << "MERGE " << run1_start << " " << run1_end << " " << run2_start << " " << run2_end << " " << scratch_start << " " << scratch_end << "\n";
-
   int scratch_index = scratch_start;
 
   int run1_index = run1_start;
@@ -151,7 +146,12 @@ void bottom_up_merge_sort(int start, int end, data_t *data, data_t *scratch) {
 
   // std::cout << start << " " << end << "\n";
 
+  // std::cout << data << " ORIG DATA ";
+  // print_l(end-start, data+start);
+
+
   int n = end - start;
+  int swap_count = 0;
 
   // 1 interation for each width.
   for (int width = 1; width < n; width = 2 * width) {
@@ -171,11 +171,52 @@ void bottom_up_merge_sort(int start, int end, data_t *data, data_t *scratch) {
 
     }
 
-    // std::cout << "SCRATCH ";
+    // std::cout << scratch << " SCRATCH ";
     // print_l(end-start, scratch+start);
 
+    // std::cout << data << " DATA ";
+    // print_l(end-start, data+start);
+
+    // std::cout << "Before Swapping " << "\n";
+
     // Once one iteration of fixed width is done copy scratch back to data.
-    std::memcpy(data + start, scratch + start, (n * sizeof(data_t)));
+    //std::memcpy(data + start, scratch + start, (n * sizeof(data_t)));
+
+
+    // Swap data and scratch
+
+    data_t *temp;
+
+    temp     = data;
+    data     = scratch;
+    scratch  = temp;
+
+    swap_count++;
+
+    // std::cout << scratch << " SCRATCH should contain prev data value ";
+    // print_l(end-start, scratch+start);
+
+    // std::cout << data << " DATA shoudl contain prev scratch value ";
+    // print_l(end-start, data+start);
+
+    // std::cout << "Above is iter for ------------------------------------ " << width << " " << swap_count <<"\n";
+
+  }
+
+  // TODO : The logic below is too complex, simplify it.
+  // After odd number of swaps scratch pointer is the original data pointer
+  // and data pointer is the original scratch pointer.
+  // But data pointer has the sorted data.
+  // So we copy from data pointer to scratch pointer
+  if ((swap_count % 2) == 1) {
+    std::memcpy(scratch + start, data + start, (n * sizeof(data_t)));
+
+    // std::cout << scratch << " SCRATCH After Copying ";
+    // print_l(end-start, scratch+start);
+
+    // std::cout << data << " DATA After Copying  ";
+    // print_l(end-start, data+start);
+
   }
 }
 
@@ -186,7 +227,7 @@ void psort(int n, data_t *data) {
     int end;
   };
 
-  int procs = 4;//omp_get_num_procs();
+  int procs = 8;//omp_get_num_procs();
   struct range *base_ranges = (struct range*)malloc(procs * sizeof(struct range));
 
   //std::cout << "Procs " << omp_get_num_procs() << "\n";
@@ -215,21 +256,6 @@ void psort(int n, data_t *data) {
       //print_l(n, scratch);
 
     }
-
-    // std::cout << "DATA After merges ";
-    // print_l(n, data);
-
-    // std::cout << "--------------------  All Merging done ------------------------\n";
-
-    int partition_stride = 2; // How many partitions to be form a single run
-
-    // 8 partitions require 3 merges
-
-    // for (int proc = 0; proc < procs; proc++) {
-    //   std::cout << "base Range " << proc << " " << base_ranges[proc].start << " " << base_ranges[proc].end << "\n";
-    // }
-
-    //free(scratch);
   }
 
   int partition_count = 1;
@@ -237,7 +263,7 @@ void psort(int n, data_t *data) {
 
   while (partition_count < total_partitions) {
     // We process two set of partitions at a time.
-    // Each partition set contains partition_cout partitions.
+    // Each partition set contains partition_count partitions.
 
     int i = 0;
     while (i < total_partitions) {
