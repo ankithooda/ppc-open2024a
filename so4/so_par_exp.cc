@@ -261,6 +261,8 @@ void psort(int n, data_t *data) {
   int partition_count = 1;
   int total_partitions = procs;
 
+  int swap_count = 0;
+
   while (partition_count < total_partitions) {
     // We process two set of partitions at a time.
     // Each partition set contains partition_count partitions.
@@ -281,16 +283,48 @@ void psort(int n, data_t *data) {
       i = i + (partition_count * 2);
     }
 
-    // Once all merges are done, copy back scratch buffer.
-    std::memcpy(data, scratch, (n * sizeof(data_t)));
-
     // print_l(n, scratch);
     // print_l(n, data);
 
     partition_count = partition_count * 2;
 
+    // Swap data and scratch
+
+    data_t *temp;
+    temp     = data;
+    data     = scratch;
+    scratch  = temp;
+    swap_count++;
+
+
+    // Once all merges are done, copy back scratch buffer.
+    // std::memcpy(data, scratch, (n * sizeof(data_t)));
+
+
     // std::cout << "---------------------------------------------------- \n" ;
   }
+  // TODO : The logic below is too complex, simplify it.
+  // After odd number of swaps scratch pointer is the original data pointer
+  // and data pointer is the original scratch pointer.
+  // But data pointer has the sorted data.
+  // So we copy from data pointer to scratch pointer
+  if ((swap_count % 2) == 1) {
+    // Swap back
+    data_t *temp;
+    temp     = data;
+    data     = scratch;
+    scratch  = temp;
+
+    std::memcpy(data, scratch, (n * sizeof(data_t)));
+
+    // std::cout << scratch << " SCRATCH After Copying ";
+    // print_l(end-start, scratch+start);
+
+    // std::cout << data << " DATA After Copying  ";
+    // print_l(end-start, data+start);
+
+  }
+
   free(scratch);
 
 }
@@ -313,7 +347,7 @@ int test_monotonicity(int count, data_t *data) {
 
 int main() {
 
-  const int count = 10000000;
+  const int count = 100000000;
   data_t *data = (data_t *)malloc(count * sizeof(data_t));
 
   std::random_device seed;
