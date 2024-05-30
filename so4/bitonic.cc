@@ -4,6 +4,7 @@
 #include <x86intrin.h>
 #include <omp.h>
 #include <limits>
+#include <cstring>
 
 #define long_v __m256i
 
@@ -39,6 +40,16 @@ void print_vector_long(int n, __m256i *v) {
   }
 }
 
+void bitonic_merge(int p1_start, int p1_end, int p2_start, int p2_end, long_v *data, long_v *scratch) {
+
+}
+
+// order : 0 -> ascending
+// order : 1 -> descending
+void bitonic_sort(int order, int start, int end, long_v *data, long_v *scratch) {
+
+}
+
 void psort(int n, data_t *data) {
     // FIXME: Implement a more efficient parallel sorting algorithm for the CPU,
     // using the basic idea of quicksort.
@@ -48,26 +59,69 @@ void psort(int n, data_t *data) {
   __mmask8 all1 = _cvtu32_mask8(15);
 
   long_v *padded_data;
+  long_v *scratch_data;
   long_v max_vector = _mm256_set1_epi64x(infinity);
 
   if (posix_memalign((void**)&padded_data, align_boundary, pad_n * capacity * sizeof(data_t)) != 0) {
     return;
   }
 
+  if (posix_memalign((void**)&scratch_data, align_boundary, pad_n * capacity * sizeof(data_t)) != 0) {
+    return;
+  }
+
+  print_l(n, data);
+
   for (int i = 0; i < pad_n-1; i++) {
-    //std::cout << i << " " << (i * capacity * sizeof(data_t)) << "\n";
+    std::cout << i << " " << i * capacity << " " << (i * capacity) + capacity << "\n";
     //print_l(4, data + (i * capacity));
+    if ((i % 2) == 0) {
+      std::sort(data + (i * capacity), data + (i * capacity) + capacity,  std::less<long long>());
+    } else {
+      std::sort(data + (i * capacity), data + (i * capacity) + capacity,  std::greater<long long>());
+    }
     padded_data[i] = _mm256_mask_expandloadu_epi64(max_vector, all1, data + (i * capacity));
   }
 
-  // For the last vector which might be partially filled.
+  // Fill the last vector which might be partially filled.
   int gap = (pad_n * capacity) - n;
-  std::cout << pad_n << " " << capacity << " " << n << " " << gap << "\n";
+  //std::cout << pad_n << " " << capacity << " " << n << " " << gap << "\n";
   __mmask8 gap_mask = _cvtu32_mask8(pow(2, (capacity - gap)) -1);
-  padded_data[pad_n - 1] = _mm256_mask_expandloadu_epi64(max_vector,gap_mask,data + ((pad_n - 1) * capacity));
 
-  print_l(n, data);
+  data_t *last_vector;
+
+  if (posix_memalign((void**)&last_vector, align_boundary, capacity * sizeof(data_t)) != 0) {
+    return;
+  }
+
+  for (int vector_index = 0; vector_index < capacity - gap; vector_index++) {
+    last_vector[vector_index] = data[((pad_n - 1) * capacity) + vector_index];
+  }
+
+  for (int vector_index = capacity - gap; vector_index < capacity; vector_index++) {
+    last_vector[vector_index] = infinity;
+  }
+
+  if (((pad_n - 1) % 2) == 0) {
+    std::sort(last_vector, last_vector + capacity, std::less<long long>());
+  } else {
+    std::sort(last_vector, last_vector + capacity, std::greater<long long>());
+  }
+
+  padded_data[pad_n - 1] = _mm256_mask_expandloadu_epi64(max_vector, all1, last_vector);
+
   print_vector_long(pad_n, padded_data);
+
+  /////////////////// MERGE SORT IMPL /////////////////////////////
+  // int procs = 8;
+  // int partition_len = pad_n / procs;
+
+  // for (int p = 0; p < procs; p++) {
+  //   int partition_start = p * partition_len;
+  //   int partition_end = std::min((partition_start + partition_len), pad_n);
+
+  //   bitonic_sort(partition_start, partition_end, padded_data, scratch_data);
+  // }
 
 
   //std::sort(data, data + n);
@@ -91,7 +145,7 @@ int test_monotonicity(int count, data_t *data) {
 
 int main() {
 
-  const int count = 34;
+  const int count = 38;
   data_t *data = (data_t *)malloc(count * sizeof(data_t));
 
   std::random_device seed;
