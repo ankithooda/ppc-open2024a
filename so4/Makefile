@@ -13,3 +13,5 @@ so_parallel_sort:
 so_par_exp:
 	mkdir -p bin/ && g++ -fopenmp -g -O0 -march=native -std=c++17 -o bin/so_par_exp so_par_exp.cc
 
+bitonic:
+	mkdir -p bin/ && g++ -fopenmp -g -O0 -march=native -std=c++17 -o bin/bitonic bitonic.cc
