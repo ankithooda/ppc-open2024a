@@ -248,88 +248,28 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   /////////////////////////////////////////////////////////////////////////////
 
   //before = __rdtsc();
-  unsigned factor = 2;
-  //unsigned bound_nx = pad_nx < factor ? factor : pad_nx;
-  unsigned bound_r, bound_c;
-  bound_r = bound_c = ny < factor ? factor : ny;
 
 #pragma omp parallel for num_threads(8)
-  for (unsigned int r = 0; r < bound_r; r = r + factor) {
-    //#pragma omp parallel for
-    for (unsigned int c = 0; c < bound_c; c = c + factor) {
-      //if (r > c) {continue;}       // Go to next r, c pair
-
-      // Iterate on all 4 results simlultaneously
-      // Get memory for 4 accumulators & 4 double sums
-      __m256d acc4[4];
-      double sum4[4];
-
-      // Set all four accumulators and double sums to zero, initialized above.
-      for (unsigned int a = 0; a < factor * factor; a++) {
-        acc4[a] = _mm256_setzero_pd();
-        sum4[a] = 0;
-      }
-
-      // 3 values for r + 0, r + 1, c + 0, c + 1
-      unsigned int r0 = r;
-      unsigned int r1 = r + 1;
-
-      unsigned int c0 = c;
-      unsigned int c1 = c + 1;
-
-      // We have 4 result cells
-      // [r0, c0] [r0, c1]
-      // [r1, c0] [r1, c1]
-
-      // Calculate all 4 accs in one single loop
-
-      for (unsigned k = 0; k < pad_nx; k++) {
-        //[r0, c0] [r0, c1]
-        if (r0 <= c0 && r0 < ny && c0 < ny) {
-          acc4[0] = _mm256_fmadd_pd(IT[k + r0 * pad_nx], IT[k + c0 * pad_nx], acc4[0]);
+  for (unsigned int r = 0; r < ny; r++) {
+    for (unsigned int c = 0; c < ny; c++) {
+      if ( r <= c) {
+        double sum = 0;
+        __m256d acc = _mm256_setzero_pd();
+        for (unsigned k = 0; k < pad_nx; k++) {
+          acc = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc);
         }
-        if (r0 <= c1 && r0 < ny && c1 < ny) {
-          acc4[1] = _mm256_fmadd_pd(IT[k + r0 * pad_nx], IT[k + c1 * pad_nx], acc4[1]);
-        }
-
-        // [r1, c0] [r1, c1]
-        if (r1 <= c0 && r1 < ny && c0 < ny) {
-          acc4[2] = _mm256_fmadd_pd(IT[k + r1 * pad_nx], IT[k + c0 * pad_nx], acc4[2]);
-        }
-        if (r1 <= c1 && r1 < ny && c1 < ny) {
-          acc4[3] = _mm256_fmadd_pd(IT[k + r1 * pad_nx], IT[k + c1 * pad_nx], acc4[3]);
-        }
-      }
-
-      // Take horizontal sums for all 4 accs
-
-      for (unsigned f = 0; f < factor * factor; f++) {
-        __m128d vlow  = _mm256_castpd256_pd128(acc4[f]);
-        __m128d vhigh = _mm256_extractf128_pd(acc4[f], 1);    // high 128
-        vlow  = _mm_add_pd(vlow, vhigh);                     // reduce down to 128
+        // Take horizontal sum
+        __m128d vlow  = _mm256_castpd256_pd128(acc);
+        __m128d vhigh = _mm256_extractf128_pd(acc, 1); // high 128
+        vlow  = _mm_add_pd(vlow, vhigh);               // reduce down to 128
 
         __m128d high64 = _mm_unpackhi_pd(vlow, vlow);
-        sum4[f] =  _mm_cvtsd_f64(_mm_add_sd(vlow, high64));
-      }
-
-      if (r0 <= c0 && r0 < ny && c0 < ny) {
-        result[c0 + r0 * ny] = (float)sum4[0];
-      }
-
-      if (r0 <= c1 && r0 < ny && c1 < ny) {
-        result[c1 + r0 * ny] = (float)sum4[1];
-      }
-
-      ///////////////////////////////////////////////////////////
-      if (r1 <= c0 && r1 < ny && c0 < ny) {
-        result[c0 + r1 * ny] = (float)sum4[2];
-      }
-
-      if (r1 <= c1 && r1 < ny && c1 < ny) {
-        result[c1 + r1 * ny] = (float)sum4[3];
+        sum =  _mm_cvtsd_f64(_mm_add_sd(vlow, high64));
+        result[c + r * ny] = (float)sum;
       }
     }
   }
+
   //after = __rdtsc();
   //std::cout << after - before << " Matrix calc \n";
 
