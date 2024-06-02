@@ -40,13 +40,95 @@ void print_vector_long(int n, __m256i *v) {
   }
 }
 
-void bitonic_merge(int p1_start, int p1_end, int p2_start, int p2_end, long_v *data, long_v *scratch) {
+void merge_2_simd(long_v *a, long_v *b, long_v *o1, long_v *o2) {
+  long_v min_vector;
+  long_v max_vector;
+  long_v t1;
+  long_v t2;
 
+  int reverse_control = b00011011;      // Control for reversing a 4-wide SIMD vector
+  int swap_control    = b11100100;      // Swap 2nd and 3rd element in 4-wide SIMD vector
+
+  // Reverse the second vector
+  *b = _mm256_permute4x64_epi64(*b, reverse_control);
+
+  // Level 1
+
+  // Calculate min, max and Interleave
+  min_vector = _mm256_min_epi64(*a, *b);
+  max_vector = _mm256_max_epi64(*a, *b);
+
+  t1 = _mm256_unpackhi_epi64(min_vector, max_vector);
+  t2 = _mm256_unpacklo_epi64(min_vector, max_vector);
+
+  // t1 and t2 are inputs for level 2
+  t1 = _mm256_permute4x64_epi64(t1, swap_control);
+  t2 = _mm256_permute4x64_epi64(t2, swap_control);
+
+  min_vector = _mm256_min_epi64(data[p1_start + i], data[p2_start + i]);
+  max_vector = _mm256_max_epi64(data[p1_start + i], data[p2_start + i]);
+
+  t1 = _mm256_unpackhi_epi64(min_vector, max_vector);
+  t2 = _mm256_unpacklo_epi64(min_vector, max_vector);
+
+  // t1 and t2 are inputs for level 3
+  t1 = _mm256_permute4x64_epi64(t1, swap_control);
+  t2 = _mm256_permute4x64_epi64(t2, swap_control);
+
+  min_vector = _mm256_min_epi64(data[p1_start + i], data[p2_start + i]);
+  max_vector = _mm256_max_epi64(data[p1_start + i], data[p2_start + i]);
+
+  t1 = _mm256_unpackhi_epi64(min_vector, max_vector);
+  t2 = _mm256_unpacklo_epi64(min_vector, max_vector);
+
+  *o1 = t1;
+  *o2 = t2;
+}
+
+// p1_start -> p1_end is sorted.
+// p2_start -> p2_end is sorted.
+// Copy the sorted to s_start -> s_end in scratch
+void bitonic_merge(int p1_start, int p1_end, int p2_start, int p2_end, long_v *data, int s_start, int s_end, long_v *scratch) {
+
+  long_v min_vector;
+
+  int p1_index = p1_start;
+  int p2_index = p2_start;
+
+
+  while ((p1_index < p1_end) && (p2_index < p2_end)) {
+
+  }
 }
 
 // order : 0 -> ascending
 // order : 1 -> descending
-void bitonic_sort(int order, int start, int end, long_v *data, long_v *scratch) {
+void bitonic_sort(int start, int end, long_v *data, long_v *scratch) {
+
+  int n = end - start;
+  if (n == 1) {
+    return;
+  }
+
+  int width = 1; // Vectors in a single partition.
+
+  // Two partitions forming a single bitonic pair is merged into a sorted partition.
+
+  for (int w = width; w < n; w = w * 2) {
+    // Merge two partitions of width w.
+    for (int i = 0; i < n; i = i + (2 * w)) {
+      int p1_start = i;
+      int p1_end   = std::min(p1_start + w, n);
+      int p2_start = p1_end;
+      int p2_end   = std::min(p2_start + w, n);
+      bitonic_merge(p1_start, p1_end, p2_start, p2_end, data, p1_start, p2_end, scratch);
+    }
+
+    // After one width is processed, we copy scratch to main data.
+
+  }
+
+
 
 }
 
@@ -113,18 +195,27 @@ void psort(int n, data_t *data) {
   print_vector_long(pad_n, padded_data);
 
   /////////////////// MERGE SORT IMPL /////////////////////////////
-  // int procs = 8;
-  // int partition_len = pad_n / procs;
+  int procs = 8;
+  int partition_len = pad_n / procs;
 
-  // for (int p = 0; p < procs; p++) {
-  //   int partition_start = p * partition_len;
-  //   int partition_end = std::min((partition_start + partition_len), pad_n);
+  // Divide the input into 8 partitions,
+  // spawn a thread for each partition,
+  // After each partition is sorted
+  // Merge them
 
-  //   bitonic_sort(partition_start, partition_end, padded_data, scratch_data);
-  // }
+  for (int p = 0; p < procs; p++) {
+    int partition_start = p * partition_len;
+    int partition_end = std::min((partition_start + partition_len), pad_n);
+
+    bitonic_sort(partition_start, partition_end, padded_data, scratch_data);
+  }
 
 
   //std::sort(data, data + n);
+
+  free(padded_data);
+  free(scratch_data);
+  free(last_vector);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

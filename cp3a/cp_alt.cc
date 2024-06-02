@@ -324,7 +324,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
         }
       }
 
-      // Take horizontal sums for all 9 accs
+      // Take horizontal sums for all 4 accs
 
       for (unsigned f = 0; f < factor * factor; f++) {
         __m128d vlow  = _mm256_castpd256_pd128(acc4[f]);
