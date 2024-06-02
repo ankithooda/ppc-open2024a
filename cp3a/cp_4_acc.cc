@@ -253,7 +253,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   unsigned bound_r, bound_c;
   bound_r = bound_c = ny < factor ? factor : ny;
 
-#pragma omp parallel for num_threads(8)
+  #pragma omp parallel for
   for (unsigned int r = 0; r < bound_r; r = r + factor) {
     //#pragma omp parallel for
     for (unsigned int c = 0; c < bound_c; c = c + factor) {
