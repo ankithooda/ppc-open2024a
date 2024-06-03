@@ -257,7 +257,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   for (unsigned int r = 0; r < bound_r; r = r + factor) {
     //#pragma omp parallel for
     for (unsigned int c = 0; c < bound_c; c = c + factor) {
-      //if (r > c) {continue;}       // Go to next r, c pair
+      if (r > c) {continue;}       // Go to next r, c pair
 
       // Iterate on all 4 results simlultaneously
       // Get memory for 4 accumulators & 4 double sums
