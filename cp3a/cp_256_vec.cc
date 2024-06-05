@@ -5,8 +5,8 @@
 #include <cmath>
 #include <x86intrin.h>
 
-constexpr unsigned int capacity = 8; // Vector registers can hold 8 double precision float.
-constexpr int align_boundary = 64;
+constexpr unsigned int capacity = 4; // Vector registers can hold 4 double precision float.
+constexpr int align_boundary = 32;
 
 void print_m(unsigned int ny, unsigned int nx, double *T) {
 
@@ -28,11 +28,11 @@ void print_m(unsigned int ny, unsigned int nx, const float *T) {
   }
 }
 
-void print_vector_double(__m512d *v) {
+void print_vector_double(__m256d *v) {
   double *a;
   // std::cout << v << " Address of vector\n";
   if (posix_memalign((void**)&a, align_boundary, capacity * sizeof(double)) == 0) {
-    _mm512_store_pd(a, *v);
+    _mm256_store_pd(a, *v);
     for (unsigned int i = 0; i < capacity; i++) {
       std::cout << " " << a[i] << " ";
     }
@@ -41,7 +41,7 @@ void print_vector_double(__m512d *v) {
   }
 }
 
-void print_matrix_vector_double(unsigned int ny, unsigned int nx, __m512d *matrix) {
+void print_matrix_vector_double(unsigned int ny, unsigned int nx, __m256d *matrix) {
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < nx; c++) {
       // std::cout << matrix + c + r * nx << " Address in loop\n";
@@ -78,21 +78,17 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   ///
   //////////////////////////////////////////////////////////////////////////////
   // COPY ORIGINAL DATA TO A DOUBLE FLOAT MATRIX
-  // WHICH WILL ACT AS SOURCE FOR CREATING __m512d MATRIX.
-  // This needs to be done because __m512d gets loaded with
+  // WHICH WILL ACT AS SOURCE FOR CREATING __m256d MATRIX.
+  // This needs to be done because __m256d gets loaded with
   // continuous memory therefore the source memory should be
   // doubles (8-byte) not floats (4-byte).
   //before = __rdtsc();
-  //std::cout << "DATA \n";
-  //print_m(ny, nx, data);
   #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     for (unsigned int c = 0; c < nx; c++) {
       DT[c + r * nx] = (double)data[c + r * nx];
     }
   }
-  //std::cout << "DT \n";
-  //print_m(ny, nx, DT);
   //after = __rdtsc();
   //std::cout << after - before << " DT Copy \n";
 
@@ -102,14 +98,14 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
 
   // Vector Matrix
   __mmask8 pad_mask;
-  __m512d *IT;
+  __m256d *IT;
   int mask_bits;
 
   if (posix_memalign((void**)&IT, align_boundary, ny * pad_nx * capacity * sizeof(double)) != 0) {
     // Return from function, this will cause
     // address sanitizer issuer in the testing framework
     // as other memory has not been freed.
-    // We dont care if we are not able to allocate memory for the __m512d
+    // We dont care if we are not able to allocate memory for the __m256d
     // all is lost.
     return;
   }
@@ -126,18 +122,16 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   //before = __rdtsc();
   //#pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
-    pad_mask = _cvtu32_mask8(255);
+    pad_mask = _cvtu32_mask8(15);
     for (unsigned int c = 0; c < pad_nx-1; c++) {
-      IT[c + r * pad_nx] = _mm512_maskz_loadu_pd(pad_mask, DT + c * capacity + r * nx);
+      IT[c + r * pad_nx] = _mm256_maskz_loadu_pd(pad_mask, DT + c * capacity + r * nx);
     }
     // Fill in the the last vector which can be partially filled.
     mask_bits = nx - ((pad_nx - 1) * capacity);
     pad_mask = _cvtu32_mask8(pow(2, mask_bits) - 1);
     //std::cout << mask_bits << " " << nx - ((pad_nx - 1) * capacity) << " " << nx << " " << pad_nx << "\n";
-    IT[pad_nx - 1 + r * pad_nx] = _mm512_maskz_expandloadu_pd(pad_mask, DT + ((pad_nx - 1) * capacity) + r * nx);
+    IT[pad_nx - 1 + r * pad_nx] = _mm256_maskz_expandloadu_pd(pad_mask, DT + ((pad_nx - 1) * capacity) + r * nx);
   }
-  //std::cout << "VECT MATRIX \n";
-  //print_matrix_vector_double(ny, pad_nx, IT);
   //after = __rdtsc();
   //std::cout << after - before << " Vector Copy \n";
 
@@ -158,12 +152,19 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   //#pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
     double sum = 0;
-    __m512d acc = _mm512_setzero_pd();
+    __m256d acc = _mm256_setzero_pd();
 
     for (unsigned int c = 0; c < pad_nx; c++) {
       acc = acc + IT[c + r * pad_nx];
     }
-    sum = _mm512_reduce_add_pd(acc);
+
+    // Take horizontal sum
+    __m128d vlow  = _mm256_castpd256_pd128(acc);
+    __m128d vhigh = _mm256_extractf128_pd(acc, 1); // high 128
+    vlow  = _mm_add_pd(vlow, vhigh);               // reduce down to 128
+
+    __m128d high64 = _mm_unpackhi_pd(vlow, vlow);
+    sum =  _mm_cvtsd_f64(_mm_add_sd(vlow, high64));
     row_means[r] = sum / nx;       // Sum is divided by original nx not pad_nx
   }
 
@@ -173,16 +174,8 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   // each element of the row by the arithmetic mean of the row.
   //#pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
-    __m512d mean = _mm512_set_pd(
-                                 row_means[r],
-                                 row_means[r],
-                                 row_means[r],
-                                 row_means[r],
-                                 row_means[r],
-                                 row_means[r],
-                                 row_means[r],
-                                 row_means[r]);
-    __m512d zeros = _mm512_setzero_pd();
+    __m256d mean = _mm256_set_pd(row_means[r], row_means[r], row_means[r], row_means[r]);
+    __m256d zeros = _mm256_setzero_pd();
     for (unsigned int c = 0; c < pad_nx; c++) {
       IT[c + r * pad_nx] = IT[c + r * pad_nx] - mean;
     }
@@ -193,7 +186,7 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     mask_bits = nx - ((pad_nx - 1) * capacity);
     pad_mask = _cvtu32_mask8(pow(2, mask_bits) - 1);
     pad_mask = _knot_mask8(pad_mask);
-    IT[pad_nx - 1 + r * pad_nx] = _mm512_mask_and_pd(IT[pad_nx - 1 + r * pad_nx], pad_mask, IT[pad_nx - 1 + r * pad_nx], zeros);
+    IT[pad_nx - 1 + r * pad_nx] = _mm256_mask_and_pd(IT[pad_nx - 1 + r * pad_nx], pad_mask, IT[pad_nx - 1 + r * pad_nx], zeros);
   }
   //after = __rdtsc();
   //std::cout << after - before << " 1st norm \n";
@@ -213,27 +206,27 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
   //before = __rdtsc();
   #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
-    __m512d acc = _mm512_setzero_pd();
+    double sq_sum = 0;
+    __m256d acc = _mm256_setzero_pd();
 
     for (unsigned int c = 0; c < pad_nx; c++) {
       acc = acc + IT[c + r * pad_nx] * IT[c + r * pad_nx];
     }
-    row_sq_sums[r] = sqrt(_mm512_reduce_add_pd(acc));
+    // Take horizontal sum
+    __m128d vlow  = _mm256_castpd256_pd128(acc);
+    __m128d vhigh = _mm256_extractf128_pd(acc, 1); // high 128
+    vlow  = _mm_add_pd(vlow, vhigh);               // reduce down to 128
+
+    __m128d high64 = _mm_unpackhi_pd(vlow, vlow);
+    sq_sum =  _mm_cvtsd_f64(_mm_add_sd(vlow, high64));
+
+    row_sq_sums[r] = sqrt(sq_sum);
   }
 
   // Normalize T matrix so that sum of squared each is zero.
   #pragma omp parallel for
   for (unsigned int r = 0; r < ny; r++) {
-    __m512d root = _mm512_set_pd(
-                                 row_sq_sums[r],
-                                 row_sq_sums[r],
-                                 row_sq_sums[r],
-                                 row_sq_sums[r],
-                                 row_sq_sums[r],
-                                 row_sq_sums[r],
-                                 row_sq_sums[r],
-                                 row_sq_sums[r]
-                                 );
+    __m256d root = _mm256_set_pd(row_sq_sums[r], row_sq_sums[r], row_sq_sums[r], row_sq_sums[r]);
 
     for (unsigned int c = 0; c < pad_nx; c++) {
       IT[c + r * pad_nx] = IT[c + r * pad_nx] / root;
@@ -261,11 +254,17 @@ void correlate(int orig_y, int orig_x, const float *data, float *result) {
     for (unsigned int c = 0; c < ny; c++) {
       if ( r <= c) {
         double sum = 0;
-        __m512d acc = _mm512_setzero_pd();
+        __m256d acc = _mm256_setzero_pd();
         for (unsigned k = 0; k < pad_nx; k++) {
-          acc = _mm512_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc);
+          acc = _mm256_fmadd_pd(IT[k + r * pad_nx], IT[k + c * pad_nx], acc);
         }
-        sum = _mm512_reduce_add_pd(acc);
+        // Take horizontal sum
+        __m128d vlow  = _mm256_castpd256_pd128(acc);
+        __m128d vhigh = _mm256_extractf128_pd(acc, 1); // high 128
+        vlow  = _mm_add_pd(vlow, vhigh);               // reduce down to 128
+
+        __m128d high64 = _mm_unpackhi_pd(vlow, vlow);
+        sum =  _mm_cvtsd_f64(_mm_add_sd(vlow, high64));
         result[c + r * ny] = (float)sum;
       }
     }
